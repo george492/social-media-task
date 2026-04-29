@@ -2,8 +2,7 @@
 sidebar.py
 ----------
 Dash sidebar layout: file upload, graph controls, layout selector,
-centrality filters, community detection, link analysis controls,
-and link prediction controls.
+centrality filters, community detection, and link analysis controls.
 """
 
 from dash import dcc, html
@@ -357,62 +356,6 @@ def build_link_analysis_card() -> html.Div:
     )
 
 
-def build_link_prediction_card() -> html.Div:
-    """Build link prediction controls (algorithm, top-N, evaluate)."""
-    from ui.styles import COLORS, STYLE_CARD, STYLE_SECTION_TITLE, STYLE_LABEL, STYLE_BUTTON
-    return html.Div(
-        style=STYLE_CARD,
-        children=[
-            html.P("🔮 Link Prediction", style=STYLE_SECTION_TITLE),
-
-            html.Label("Prediction Algorithm", style=STYLE_LABEL),
-            dcc.Dropdown(
-                id="dropdown-lp-algo",
-                options=[
-                    {"label": "Common Neighbors", "value": "common_neighbors"},
-                    {"label": "Jaccard Coefficient", "value": "jaccard"},
-                    {"label": "Adamic-Adar Index", "value": "adamic_adar"},
-                    {"label": "Preferential Attachment", "value": "preferential_attachment"},
-                ],
-                value="jaccard",
-                clearable=False,
-                style={
-                    "backgroundColor": COLORS["bg_dark"],
-                    "color": COLORS["text_primary"],
-                    "border": f"1px solid {COLORS['border']}",
-                    "borderRadius": "6px",
-                    "fontSize": "13px",
-                    "marginBottom": "10px",
-                },
-                className="dark-dropdown",
-            ),
-
-            html.Label("Top-N Predictions", style=STYLE_LABEL),
-            dcc.Slider(
-                id="slider-lp-top-n",
-                min=1, max=20, step=1, value=8,
-                marks={1: "1", 10: "10", 20: "20"},
-                tooltip={"placement": "bottom", "always_visible": False},
-            ),
-            html.Div(style={"marginBottom": "10px"}),
-
-            html.Label("Test Set Fraction (evaluation)", style=STYLE_LABEL),
-            dcc.Slider(
-                id="slider-lp-test-frac",
-                min=0.1, max=0.4, step=0.05, value=0.2,
-                marks={0.1: "10%", 0.2: "20%", 0.4: "40%"},
-                tooltip={"placement": "bottom", "always_visible": False},
-            ),
-            html.Div(style={"marginBottom": "10px"}),
-
-            html.Button(
-                "🔮 Run Prediction",
-                id="btn-run-link-prediction",
-                style={**STYLE_BUTTON, "backgroundColor": COLORS["accent_purple"]},
-            ),
-        ],
-    )
-
 
 def build_sidebar() -> html.Div:
     """Assemble the complete sidebar from all control cards."""
@@ -427,6 +370,5 @@ def build_sidebar() -> html.Div:
             build_centrality_filter_card(),
             build_community_card(),
             build_link_analysis_card(),
-            build_link_prediction_card(),
         ],
     )

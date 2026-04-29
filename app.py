@@ -625,55 +625,6 @@ app.clientside_callback(
 )
 
 
-# 12. Link prediction ─────────────────────────────────────────────────────────
-@app.callback(
-    Output("store-lp-predictions", "data"),
-    Output("store-lp-evaluation", "data"),
-    Input("btn-run-link-prediction", "n_clicks"),
-    State("store-graph-data", "data"),
-    State("dropdown-lp-algo", "value"),
-    State("slider-lp-top-n", "value"),
-    State("slider-lp-test-frac", "value"),
-    prevent_initial_call=True,
-)
-def run_link_prediction(n_clicks, graph_json, algo, top_n, test_frac):
-    if not graph_json:
-        return no_update, no_update
-    try:
-        meta = json.loads(graph_json)
-        directed = meta.get("directed", False)
-        G = nx.DiGraph() if directed else nx.Graph()
-        for n in meta["nodes"]:
-            G.add_node(n["id"])
-        for e in meta["edges"]:
-            G.add_edge(e["source"], e["target"])
-
-        algo = algo or "jaccard"
-        top_n = int(top_n or 8)
-        test_frac = float(test_frac or 0.2)
-
-        predictions = predict_links(G, algorithm=algo, top_n=top_n)
-        evaluation = evaluate_link_prediction(G, algorithm=algo, test_fraction=test_frac)
-
-        return json.dumps(predictions), json.dumps(evaluation)
-    except Exception as e:
-        print(f"[link_prediction callback] Error: {e}")
-        return no_update, no_update
-
-
-# 13. Render link prediction results ──────────────────────────────────────────
-@app.callback(
-    Output("link-prediction-table", "children"),
-    Output("link-prediction-eval", "children"),
-    Input("store-lp-predictions", "data"),
-    Input("store-lp-evaluation", "data"),
-    prevent_initial_call=True,
-)
-def update_link_prediction_panels(predictions_json, evaluation_json):
-    predictions = json.loads(predictions_json) if predictions_json else []
-    evaluation = json.loads(evaluation_json) if evaluation_json else {}
-    return build_link_prediction_table(predictions), build_link_prediction_eval(evaluation)
-
 
 # 14. Export: Nodes CSV ────────────────────────────────────────────────────────
 @app.callback(
