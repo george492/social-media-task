@@ -70,10 +70,11 @@ def build_graph_panel() -> html.Div:
     return html.Div(
         style={
             "display": "flex",
-            "flex": "1",
+            "flex": "1 1 0",
             "gap": "12px",
             "padding": "12px",
             "minHeight": "0",
+            "overflow": "hidden",
         },
         children=[
             # Graph container

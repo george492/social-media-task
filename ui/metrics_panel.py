@@ -317,7 +317,8 @@ def build_metrics_panel() -> html.Div:
             "backgroundColor": COLORS["bg_dark"],
             "display": "flex",
             "flexDirection": "column",
-            "maxHeight": "340px",
+            "height": "280px",
+            "flexShrink": "0",
             "overflow": "hidden",
         },
         children=[
