@@ -12,7 +12,7 @@ Then open: http://localhost:8050
 import json
 import pandas as pd
 import networkx as nx
-from dash import Dash, Input, Output, State, html, dcc, callback_context, no_update
+from dash import Dash, Input, Output, State, html, dcc, callback_context, no_update, ALL
 
 # Internal modules
 from src.graph_loader import parse_upload, load_graph_from_dataframes, get_graph_summary
@@ -68,6 +68,9 @@ app.layout = html.Div(
         dcc.Store(id="store-betweenness"), # betweenness scores JSON
         dcc.Store(id="store-lp-predictions"), # link prediction results JSON
         dcc.Store(id="store-lp-evaluation"),  # link prediction eval JSON
+        dcc.Store(id="store-node-overrides", data="{}"),  # per-node {id: {color, label}}
+        dcc.Store(id="store-selected-node"),              # currently tapped node id
+        dcc.Store(id="store-color-picker-value", data="#58a6ff"),  # mirrors html.Input color
 
         # Download components for export
         dcc.Download(id="download-nodes-csv"),
@@ -341,6 +344,7 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
     Input("filter-closeness", "value"),
     Input("check-link-analysis", "value"),
     Input("slider-top-n", "value"),
+    Input("store-node-overrides", "data"),
     prevent_initial_call=True,
 )
 def render_graph(
@@ -349,7 +353,7 @@ def render_graph(
     layout_name, color_by, size_by,
     node_size, edge_thickness,
     filter_degree, filter_betweenness, filter_closeness,
-    link_checks, top_n,
+    link_checks, top_n, overrides_json,
 ):
     if not graph_json:
         return [], "No graph loaded"
@@ -432,12 +436,20 @@ def render_graph(
             node_sizes = {str(n): base_ns for n in G.nodes()}
 
         # ── Build elements ────────────────────────────────────────────────
+        overrides = json.loads(overrides_json) if overrides_json else {}
+
+        # Apply per-node color overrides before building elements
+        for node_id_ov, ov in overrides.items():
+            if "color" in ov:
+                node_colors[str(node_id_ov)] = ov["color"]
+
         elements = build_cytoscape_elements(
             subG, positions, node_colors, node_sizes,
             base_node_size=base_ns,
             base_edge_thickness=float(edge_thickness or 2),
             directed=directed,
             hidden_nodes=set(),  # Already filtered via subG
+            label_overrides={str(k): v["label"] for k, v in overrides.items() if "label" in v},
         )
 
         # Apply highlight classes for link analysis
@@ -596,12 +608,126 @@ def update_link_analysis_table(pagerank_json, betweenness_json, link_checks, top
 # 10. Node info panel on click ─────────────────────────────────────────────────
 @app.callback(
     Output("node-info-content", "children"),
+    Output("node-editor-section", "style"),
+    Output("node-color-picker", "value"),
+    Output("node-color-preview", "style"),
+    Output("node-label-input", "value"),
+    Output("store-selected-node", "data"),
+    Output("store-color-picker-value", "data", allow_duplicate=True),
     Input("cytoscape-graph", "tapNodeData"),
     State("store-centralities", "data"),
+    State("store-node-overrides", "data"),
+    prevent_initial_call=True,
 )
-def update_node_info(node_data, centralities_json):
+def update_node_info(node_data, centralities_json, overrides_json):
     centralities = json.loads(centralities_json) if centralities_json else {}
-    return format_node_info(node_data or {}, centralities)
+    overrides = json.loads(overrides_json) if overrides_json else {}
+    _hidden = {"display": "none"}
+
+    if not node_data:
+        return format_node_info({}, centralities), _hidden, "#58a6ff", {"backgroundColor": "#58a6ff"}, "", None, "#58a6ff"
+
+    node_id = node_data.get("id", "")
+    ov = overrides.get(node_id, {})
+
+    current_color = ov.get("color", node_data.get("color", "#58a6ff"))
+    current_label = ov.get("label", node_data.get("label", node_id))
+
+    preview_style = {
+        "flex": "1", "height": "32px", "borderRadius": "5px",
+        "border": "1px solid #30363d", "display": "inline-block",
+        "backgroundColor": current_color, "transition": "background-color 0.2s",
+    }
+    return (
+        format_node_info(node_data, centralities),
+        {"display": "block"},
+        current_color,
+        preview_style,
+        current_label,
+        node_id,
+        current_color,
+    )
+
+
+# 10a. Quick-select color swatches ────────────────────────────────────────────
+@app.callback(
+    Output("node-color-picker", "value", allow_duplicate=True),
+    Input({"type": "color-swatch", "color": ALL}, "n_clicks"),
+    prevent_initial_call=True
+)
+def quick_select_color(n_clicks):
+    ctx = callback_context
+    if not ctx.triggered:
+        return no_update
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    try:
+        color = json.loads(triggered_id)["color"]
+        return color
+    except Exception:
+        return no_update
+
+
+# 10b. Sync html.Input color into store (clientside, fires on every change) ───
+app.clientside_callback(
+    """
+    function(color) {
+        return color || '#58a6ff';
+    }
+    """,
+    Output("store-color-picker-value", "data"),
+    Input("node-color-picker", "value"),
+    prevent_initial_call=True,
+)
+
+
+# 10b2. Live color preview from store ────────────────────────────────────────
+app.clientside_callback(
+    """
+    function(color) {
+        return {
+            flex: '1', height: '32px', borderRadius: '5px',
+            border: '1px solid #30363d', display: 'inline-block',
+            backgroundColor: color || '#58a6ff', transition: 'background-color 0.2s'
+        };
+    }
+    """,
+    Output("node-color-preview", "style", allow_duplicate=True),
+    Input("store-color-picker-value", "data"),
+    prevent_initial_call=True,
+)
+
+
+# 10c. Apply / Reset node style override ──────────────────────────────────────
+@app.callback(
+    Output("store-node-overrides", "data"),
+    Input("btn-apply-node-style", "n_clicks"),
+    Input("btn-reset-node-style", "n_clicks"),
+    State("store-selected-node", "data"),
+    State("store-color-picker-value", "data"),
+    State("node-label-input", "value"),
+    State("store-node-overrides", "data"),
+    prevent_initial_call=True,
+)
+def apply_node_override(n_apply, n_reset, selected_node, color, label, overrides_json):
+    if not selected_node:
+        return no_update
+    ctx = callback_context
+    trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
+    overrides = json.loads(overrides_json) if overrides_json else {}
+
+    if "btn-reset-node-style" in trigger:
+        overrides.pop(selected_node, None)
+    else:
+        entry = overrides.get(selected_node, {})
+        if color:
+            entry["color"] = color
+        if label is not None and label.strip() != "":
+            entry["label"] = label.strip()
+        else:
+            entry.pop("label", None)  # blank = revert to original label
+        overrides[selected_node] = entry
+
+    return json.dumps(overrides)
 
 
 # 11. Fit / Reset zoom buttons ─────────────────────────────────────────────────
