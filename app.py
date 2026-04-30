@@ -72,17 +72,12 @@ app.layout = html.Div(
         dcc.Store(id="store-selected-node"),              # currently tapped node id
         dcc.Store(id="store-color-picker-value", data="#58a6ff"),  # mirrors html.Input color
 
-        # Download components for export
-        dcc.Download(id="download-nodes-csv"),
-        dcc.Download(id="download-edges-csv"),
-        dcc.Download(id="download-graph-json"),
-
         # ── Header ──────────────────────────────────────────────────────────
         html.Div(
             style=STYLE_HEADER,
             children=[
                 html.Div([
-                    html.Span("⬡", style={"fontSize": "22px", "marginRight": "10px"}),
+                    html.Span("", style={"fontSize": "22px", "marginRight": "10px"}),
                     html.Span("Social Network Analysis Tool", style={
                         "fontSize": "16px",
                         "fontWeight": "700",
@@ -171,16 +166,16 @@ def store_nodes(contents, n_clicks, filename):
     if "btn-load-sample" in trigger:
         try:
             df = pd.read_csv("data/sample_nodes.csv")
-            return df.to_json(), f"✔ Sample nodes loaded ({len(df)} rows)"
+            return df.to_json(), f"Sample nodes loaded ({len(df)} rows)"
         except Exception as e:
-            return no_update, f"⚠ Error: {e}"
+            return no_update, f"Error: {e}"
 
     if contents:
         df = parse_upload(contents)
         if df is not None:
             fname = filename or "Nodes"
-            return df.to_json(), f"✔ {fname} loaded ({len(df)} rows)"
-        return no_update, "⚠ Failed to parse nodes file"
+            return df.to_json(), f"{fname} loaded ({len(df)} rows)"
+        return no_update, "Failed to parse nodes file"
 
     return no_update, ""
 
@@ -201,16 +196,16 @@ def store_edges(contents, n_clicks, filename):
     if "btn-load-sample" in trigger:
         try:
             df = pd.read_csv("data/sample_edges.csv")
-            return df.to_json(), f"✔ Sample edges loaded ({len(df)} rows)"
+            return df.to_json(), f"Sample edges loaded ({len(df)} rows)"
         except Exception as e:
-            return no_update, f"⚠ Error: {e}"
+            return no_update, f"Error: {e}"
 
     if contents:
         df = parse_upload(contents)
         if df is not None:
             fname = filename or "Edges"
-            return df.to_json(), f"✔ {fname} loaded ({len(df)} rows)"
-        return no_update, "⚠ Failed to parse edges file"
+            return df.to_json(), f"{fname} loaded ({len(df)} rows)"
+        return no_update, "Failed to parse edges file"
 
     return no_update, ""
 
@@ -231,7 +226,7 @@ def store_edges(contents, n_clicks, filename):
 )
 def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
     if not nodes_json and not edges_json:
-        return no_update, no_update, no_update, no_update, "⚠ No data loaded"
+        return no_update, no_update, no_update, no_update, "No data loaded"
 
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
@@ -242,7 +237,7 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
             nodes_df = pd.read_csv("data/sample_nodes.csv")
             edges_df = pd.read_csv("data/sample_edges.csv")
         except Exception as e:
-            return no_update, no_update, no_update, no_update, f"⚠ Sample load error: {e}"
+            return no_update, no_update, no_update, no_update, f"Sample load error: {e}"
     else:
         nodes_df = pd.read_json(nodes_json, dtype=str) if nodes_json else None
         edges_df = pd.read_json(edges_json) if edges_json else None
@@ -286,7 +281,7 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return no_update, no_update, no_update, no_update, f"⚠ Error building graph: {str(e)}"
+        return no_update, no_update, no_update, no_update, f"Error building graph: {str(e)}"
 
 
 # 4. Run community detection ──────────────────────────────────────────────────
@@ -761,78 +756,6 @@ app.clientside_callback(
 )
 
 
-
-# 14. Export: Nodes CSV ────────────────────────────────────────────────────────
-@app.callback(
-    Output("download-nodes-csv", "data"),
-    Input("btn-export-nodes", "n_clicks"),
-    State("store-graph-data", "data"),
-    prevent_initial_call=True,
-)
-def export_nodes_csv(n_clicks, graph_json):
-    if not graph_json:
-        return no_update
-    try:
-        meta = json.loads(graph_json)
-        import io
-        nodes_df = pd.DataFrame(meta["nodes"])
-        return dcc.send_data_frame(nodes_df.to_csv, "nodes_export.csv", index=False)
-    except Exception as e:
-        print(f"[export nodes] Error: {e}")
-        return no_update
-
-
-# 15. Export: Edges CSV ────────────────────────────────────────────────────────
-@app.callback(
-    Output("download-edges-csv", "data"),
-    Input("btn-export-edges", "n_clicks"),
-    State("store-graph-data", "data"),
-    prevent_initial_call=True,
-)
-def export_edges_csv(n_clicks, graph_json):
-    if not graph_json:
-        return no_update
-    try:
-        meta = json.loads(graph_json)
-        edges_df = pd.DataFrame(meta["edges"])
-        return dcc.send_data_frame(edges_df.to_csv, "edges_export.csv", index=False)
-    except Exception as e:
-        print(f"[export edges] Error: {e}")
-        return no_update
-
-
-# 16. Export: Full JSON ────────────────────────────────────────────────────────
-@app.callback(
-    Output("download-graph-json", "data"),
-    Input("btn-export-json", "n_clicks"),
-    State("store-graph-data", "data"),
-    State("store-centralities", "data"),
-    State("store-community", "data"),
-    State("store-pagerank", "data"),
-    State("store-betweenness", "data"),
-    State("store-lp-predictions", "data"),
-    State("store-lp-evaluation", "data"),
-    prevent_initial_call=True,
-)
-def export_graph_json(n_clicks, graph_json, centralities_json, community_json,
-                      pagerank_json, betweenness_json, predictions_json, evaluation_json):
-    if not graph_json:
-        return no_update
-    try:
-        export_data = {
-            "graph": json.loads(graph_json),
-            "centralities": json.loads(centralities_json) if centralities_json else {},
-            "community": json.loads(community_json) if community_json else {},
-            "pagerank": json.loads(pagerank_json) if pagerank_json else {},
-            "betweenness": json.loads(betweenness_json) if betweenness_json else {},
-            "link_predictions": json.loads(predictions_json) if predictions_json else [],
-            "link_prediction_evaluation": json.loads(evaluation_json) if evaluation_json else {},
-        }
-        content = json.dumps(export_data, indent=2)
-        return dict(content=content, filename="graph_export.json")
-    except Exception as e:
-        print(f"[export json] Error: {e}")
-        return no_update
 
 # 17. Toggle GN-K slider visibility ───────────────────────────────────────────
 @app.callback(

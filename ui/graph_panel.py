@@ -50,7 +50,7 @@ def build_node_info_panel() -> html.Div:
             "overflowY": "auto",
         },
         children=[
-            html.P("🔵 Node Info", style={
+            html.P("Node Info", style={
                 "color": COLORS["text_secondary"],
                 "fontSize": "11px",
                 "fontWeight": "600",
@@ -71,7 +71,7 @@ def build_node_info_panel() -> html.Div:
                 style={"display": "none"},   # hidden until a node is tapped
                 children=[
                     html.Hr(style={"borderColor": COLORS["border"], "margin": "0 0 12px 0"}),
-                    html.P("✏️ Edit Node", style={
+                    html.P("Edit Node", style={
                         "color": COLORS["text_secondary"],
                         "fontSize": "11px",
                         "fontWeight": "600",
@@ -169,7 +169,7 @@ def build_node_info_panel() -> html.Div:
                         style={"display": "flex", "gap": "6px"},
                         children=[
                             html.Button(
-                                "✔ Apply",
+                                "Apply",
                                 id="btn-apply-node-style",
                                 style={
                                     **_btn_base,
@@ -178,7 +178,7 @@ def build_node_info_panel() -> html.Div:
                                 },
                             ),
                             html.Button(
-                                "↺ Reset",
+                                "Reset",
                                 id="btn-reset-node-style",
                                 style={
                                     **_btn_base,
@@ -252,7 +252,7 @@ def build_graph_panel() -> html.Div:
                             "zIndex": "10",
                         },
                         children=[
-                            html.Button("⛶ Fit", id="btn-fit", style={
+                            html.Button("Fit", id="btn-fit", style={
                                 "backgroundColor": "rgba(22,27,34,0.9)",
                                 "color": COLORS["text_primary"],
                                 "border": f"1px solid {COLORS['border']}",
@@ -262,7 +262,7 @@ def build_graph_panel() -> html.Div:
                                 "fontSize": "12px",
                                 "backdropFilter": "blur(4px)",
                             }),
-                            html.Button("⟳ Reset", id="btn-reset-zoom", style={
+                            html.Button("Reset", id="btn-reset-zoom", style={
                                 "backgroundColor": "rgba(22,27,34,0.9)",
                                 "color": COLORS["text_primary"],
                                 "border": f"1px solid {COLORS['border']}",
@@ -449,10 +449,10 @@ def format_node_info(node_data: dict, centralities: dict) -> List:
 
     # Centrality metrics
     metric_labels = {
-        "degree": ("📊 Degree", COLORS["accent_blue"]),
-        "betweenness": ("🔀 Betweenness", COLORS["accent_purple"]),
-        "closeness": ("🎯 Closeness", COLORS["accent_green"]),
-        "pagerank": ("⭐ PageRank", COLORS["accent_orange"]),
+        "degree": ("Degree", COLORS["accent_blue"]),
+        "betweenness": ("Betweenness", COLORS["accent_purple"]),
+        "closeness": ("Closeness", COLORS["accent_green"]),
+        "pagerank": ("PageRank", COLORS["accent_orange"]),
     }
     for key, (label, color) in metric_labels.items():
         val = node_centrality.get(key)

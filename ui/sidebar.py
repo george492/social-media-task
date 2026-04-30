@@ -16,13 +16,13 @@ def build_upload_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("📂 Load Graph Data", style=STYLE_SECTION_TITLE),
+            html.P("Load Graph Data", style=STYLE_SECTION_TITLE),
 
             html.Label("Nodes CSV", style=STYLE_LABEL),
             dcc.Upload(
                 id="upload-nodes",
                 children=html.Div([
-                    html.Span("📋 ", style={"fontSize": "16px"}),
+                    html.Span("", style={"fontSize": "16px"}),
                     "Drop or ",
                     html.A("select nodes file", style={"color": COLORS["accent_blue"]}),
                 ]),
@@ -46,7 +46,7 @@ def build_upload_card() -> html.Div:
             dcc.Upload(
                 id="upload-edges",
                 children=html.Div([
-                    html.Span("🔗 ", style={"fontSize": "16px"}),
+                    html.Span("", style={"fontSize": "16px"}),
                     "Drop or ",
                     html.A("select edges file", style={"color": COLORS["accent_blue"]}),
                 ]),
@@ -67,55 +67,14 @@ def build_upload_card() -> html.Div:
             html.Div(id="edges-upload-status", style={"fontSize": "11px", "color": COLORS["accent_green"], "marginBottom": "12px"}),
 
             html.Button(
-                "📊 Load Sample Data",
+                "Load Sample Data",
                 id="btn-load-sample",
                 style={**STYLE_BUTTON, "backgroundColor": COLORS["accent_green"], "marginBottom": "6px"},
             ),
             html.Button(
-                "🔄 Build Graph",
+                "Build Graph",
                 id="btn-build-graph",
                 style=STYLE_BUTTON,
-            ),
-
-            html.Hr(style={"borderColor": COLORS["border"], "margin": "10px 0"}),
-            html.P("💾 Export", style={**STYLE_SECTION_TITLE, "marginBottom": "8px"}),
-            html.Div(
-                style={"display": "flex", "gap": "6px", "flexWrap": "wrap"},
-                children=[
-                    html.Button(
-                        "⬇ Nodes CSV",
-                        id="btn-export-nodes",
-                        style={
-                            **STYLE_BUTTON,
-                            "flex": "1",
-                            "fontSize": "11px",
-                            "padding": "6px 4px",
-                            "backgroundColor": COLORS["accent_green"],
-                        },
-                    ),
-                    html.Button(
-                        "⬇ Edges CSV",
-                        id="btn-export-edges",
-                        style={
-                            **STYLE_BUTTON,
-                            "flex": "1",
-                            "fontSize": "11px",
-                            "padding": "6px 4px",
-                            "backgroundColor": COLORS["accent_blue"],
-                        },
-                    ),
-                    html.Button(
-                        "⬇ JSON",
-                        id="btn-export-json",
-                        style={
-                            **STYLE_BUTTON,
-                            "flex": "1",
-                            "fontSize": "11px",
-                            "padding": "6px 4px",
-                            "backgroundColor": COLORS["accent_orange"],
-                        },
-                    ),
-                ],
             ),
         ],
     )
@@ -126,7 +85,7 @@ def build_graph_controls_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("⚙️ Graph Settings", style=STYLE_SECTION_TITLE),
+            html.P("Graph Settings", style=STYLE_SECTION_TITLE),
 
             html.Label("Graph Type", style=STYLE_LABEL),
             dcc.RadioItems(
@@ -184,7 +143,7 @@ def build_coloring_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("🎨 Visual Highlighting", style=STYLE_SECTION_TITLE),
+            html.P("Visual Highlighting", style=STYLE_SECTION_TITLE),
 
             html.Label("Color Nodes By", style=STYLE_LABEL),
             dcc.Dropdown(
@@ -239,7 +198,7 @@ def build_centrality_filter_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("🔍 Centrality Filters", style=STYLE_SECTION_TITLE),
+            html.P("Centrality Filters", style=STYLE_SECTION_TITLE),
 
             html.Label("Degree Centrality", style=STYLE_LABEL),
             dcc.RangeSlider(
@@ -278,7 +237,7 @@ def build_community_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("🏘️ Community Detection", style=STYLE_SECTION_TITLE),
+            html.P("Community Detection", style=STYLE_SECTION_TITLE),
 
             html.Label("Algorithm", style=STYLE_LABEL),
             dcc.Dropdown(
@@ -317,7 +276,7 @@ def build_community_card() -> html.Div:
             ),
 
             html.Button(
-                "▶ Run Detection",
+                "Run Detection",
                 id="btn-run-community",
                 style=STYLE_BUTTON,
             ),
@@ -330,7 +289,7 @@ def build_link_analysis_card() -> html.Div:
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("🔗 Link Analysis", style=STYLE_SECTION_TITLE),
+            html.P("Link Analysis", style=STYLE_SECTION_TITLE),
 
             html.Label("Highlight Top-N Influential Nodes", style=STYLE_LABEL),
             dcc.Slider(

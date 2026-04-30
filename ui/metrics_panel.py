@@ -124,8 +124,8 @@ def build_community_comparison(comparison: Optional[Dict[str, Any]]) -> html.Div
     return html.Div(
         style={"display": "flex", "gap": "10px"},
         children=[
-            algo_card("Girvan-Newman", comparison.get("girvan_newman", {}), "🌐", COLORS["accent_blue"]),
-            algo_card("Louvain", comparison.get("louvain", {}), "🏘️", COLORS["accent_purple"]),
+            algo_card("Girvan-Newman", comparison.get("girvan_newman", {}), "", COLORS["accent_blue"]),
+            algo_card("Louvain", comparison.get("louvain", {}), "", COLORS["accent_purple"]),
         ],
     )
 
@@ -183,7 +183,7 @@ def build_top_nodes_table(top_nodes: List[tuple], metric_name: str) -> html.Div:
 
     rows = []
     for rank, (node_id, score) in enumerate(top_nodes, 1):
-        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
+        medal = f"#{rank}"
         rows.append(html.Tr([
             html.Td(str(medal), style={"padding": "4px 8px", "fontSize": "12px", "color": COLORS["accent_orange"]}),
             html.Td(str(node_id), style={"padding": "4px 8px", "fontSize": "12px", "color": COLORS["text_primary"], "fontWeight": "600"}),
@@ -223,7 +223,7 @@ def build_link_prediction_table(predictions: list) -> html.Div:
 
     rows = []
     for rank, (u, v, score) in enumerate(predictions, 1):
-        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
+        medal = f"#{rank}"
         rows.append(html.Tr([
             html.Td(medal, style={"padding": "4px 6px", "fontSize": "11px", "color": COLORS["accent_orange"]}),
             html.Td(
@@ -338,7 +338,7 @@ def build_metrics_panel() -> html.Div:
                             "overflow": "hidden",
                         },
                         children=[
-                            html.P("📈 Degree Distribution", style={
+                            html.P("Degree Distribution", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",
@@ -360,7 +360,7 @@ def build_metrics_panel() -> html.Div:
                             "overflow": "auto",
                         },
                         children=[
-                            html.P("🏘️ Community Comparison", style={
+                            html.P("Community Comparison", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",
@@ -371,7 +371,7 @@ def build_metrics_panel() -> html.Div:
                             }),
                             html.Div(id="community-comparison"),
 
-                            html.P("📐 Evaluation Metrics", style={
+                            html.P("Evaluation Metrics", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",
@@ -405,7 +405,7 @@ def build_metrics_panel() -> html.Div:
                             "overflow": "auto",
                         },
                         children=[
-                            html.P("🔮 Link Prediction", style={
+                            html.P("Link Prediction", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",
@@ -415,7 +415,7 @@ def build_metrics_panel() -> html.Div:
                                 "marginTop": "0",
                             }),
                             html.Div(id="link-prediction-table"),
-                            html.P("📊 Prediction Accuracy", style={
+                            html.P("Prediction Accuracy", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",
