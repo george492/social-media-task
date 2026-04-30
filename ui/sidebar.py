@@ -238,29 +238,30 @@ def build_centrality_filter_card() -> html.Div:
         children=[
             html.P("Centrality Filters", style=STYLE_SECTION_TITLE),
 
-            html.Label("Degree", style=STYLE_LABEL),
-            dcc.RangeSlider(
-                id="filter-degree",
-                min=0, max=1, step=0.01,
-                value=[0, 1],
-                marks={0: "0", 0.5: "0.5", 1: "1"},
-                tooltip={"placement": "bottom", "always_visible": False},
+            html.Label("Filter Metric", style=STYLE_LABEL),
+            dcc.Dropdown(
+                id="dropdown-centrality-filter",
+                options=[
+                    {"label": "Degree", "value": "degree"},
+                    {"label": "Betweenness Centrality", "value": "betweenness"},
+                    {"label": "Closeness Centrality", "value": "closeness"},
+                ],
+                value="degree",
+                clearable=False,
+                style={
+                    "backgroundColor": COLORS["bg_dark"],
+                    "color": COLORS["text_primary"],
+                    "border": f"1px solid {COLORS['border']}",
+                    "borderRadius": "6px",
+                    "fontSize": "13px",
+                    "marginBottom": "10px",
+                },
+                className="dark-dropdown",
             ),
-            html.Div(style={"marginBottom": "10px"}),
 
-            html.Label("Betweenness Centrality", style=STYLE_LABEL),
+            html.Label("Range", style=STYLE_LABEL),
             dcc.RangeSlider(
-                id="filter-betweenness",
-                min=0, max=1, step=0.01,
-                value=[0, 1],
-                marks={0: "0", 0.5: "0.5", 1: "1"},
-                tooltip={"placement": "bottom", "always_visible": False},
-            ),
-            html.Div(style={"marginBottom": "10px"}),
-
-            html.Label("Closeness Centrality", style=STYLE_LABEL),
-            dcc.RangeSlider(
-                id="filter-closeness",
+                id="filter-centrality-slider",
                 min=0, max=1, step=0.01,
                 value=[0, 1],
                 marks={0: "0", 0.5: "0.5", 1: "1"},

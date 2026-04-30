@@ -339,9 +339,8 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
     Input("dropdown-edge-color-by", "value"),
     Input("slider-node-size", "value"),
     Input("slider-edge-thickness", "value"),
-    Input("filter-degree", "value"),
-    Input("filter-betweenness", "value"),
-    Input("filter-closeness", "value"),
+    Input("dropdown-centrality-filter", "value"),
+    Input("filter-centrality-slider", "value"),
     Input("store-node-overrides", "data"),
     prevent_initial_call=True,
 )
@@ -349,7 +348,7 @@ def render_graph(
     graph_json, community_json, centralities_json,
     layout_name, color_by, size_by, label_by, edge_color_by,
     node_size, edge_thickness,
-    filter_degree, filter_betweenness, filter_closeness,
+    centrality_filter_type, centrality_slider_value,
     overrides_json,
 ):
     if not graph_json:
@@ -370,16 +369,12 @@ def render_graph(
             G.add_edge(e["source"], e["target"], **{k: v for k, v in e.items() if k not in ("source", "target")})
 
         # ── Centrality filtering ──────────────────────────────────────────
-        d_lo, d_hi = filter_degree or [0, 1]
-        b_lo, b_hi = filter_betweenness or [0, 1]
-        c_lo, c_hi = filter_closeness or [0, 1]
+        c_lo, c_hi = centrality_slider_value or [0, 1]
 
         hidden_nodes = set()
         for node_id, metrics in centralities.items():
-            deg = metrics.get("degree", 0)
-            bet = metrics.get("betweenness", 0)
-            clo = metrics.get("closeness", 0)
-            if not (d_lo <= deg <= d_hi and b_lo <= bet <= b_hi and c_lo <= clo <= c_hi):
+            val = metrics.get(centrality_filter_type, 0)
+            if not (c_lo <= val <= c_hi):
                 hidden_nodes.add(node_id)
 
         # ── Layout ────────────────────────────────────────────────────────
@@ -537,15 +532,19 @@ def update_stats(stats_json):
         return build_stats_bar({})
 
 
-# 6.5. Update Degree Slider Range ──────────────────────────────────────────────
+# 6.5. Update Centrality Slider Range ──────────────────────────────────────────
 @app.callback(
-    Output("filter-degree", "max"),
-    Output("filter-degree", "marks"),
-    Output("filter-degree", "value"),
+    Output("filter-centrality-slider", "max"),
+    Output("filter-centrality-slider", "marks"),
+    Output("filter-centrality-slider", "value"),
     Input("store-stats", "data"),
+    Input("dropdown-centrality-filter", "value"),
     prevent_initial_call=True,
 )
-def update_degree_slider(stats_json):
+def update_centrality_slider(stats_json, filter_type):
+    if filter_type in ("betweenness", "closeness"):
+        return 1, {0: "0", 0.5: "0.5", 1: "1"}, [0, 1]
+
     if not stats_json:
         return 1, {0: "0", 1: "1"}, [0, 1]
     try:
