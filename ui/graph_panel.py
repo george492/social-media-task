@@ -305,6 +305,7 @@ def build_cytoscape_elements(
     positions: Dict[str, tuple],
     node_colors: Dict[str, str],
     node_sizes: Dict[str, float],
+    edge_colors: Optional[Dict[tuple, str]] = None,
     base_node_size: float = 18,
     base_edge_thickness: float = 2,
     directed: bool = False,
@@ -330,6 +331,7 @@ def build_cytoscape_elements(
     elements = []
     hidden_nodes = hidden_nodes or set()
     label_overrides = label_overrides or {}
+    edge_colors = edge_colors or {}
 
     # Scale positions to Cytoscape coordinate space
     xs = [p[0] for p in positions.values()] if positions else [0]
@@ -390,6 +392,9 @@ def build_cytoscape_elements(
         weight = float(str(edata.get("weight", 1.0)))
         # Scale thickness: [0.5, base_edge_thickness * 3]
         thickness = round(0.5 + (weight / max_weight) * (base_edge_thickness * 2), 2)
+        
+        # Determine edge color
+        color = edge_colors.get((u, v), edge_colors.get((v, u), COLORS["text_muted"]))
 
         elements.append({
             "data": {
@@ -397,7 +402,7 @@ def build_cytoscape_elements(
                 "target": vid,
                 "weight": round(weight, 2),
                 "thickness": thickness,
-                "color": COLORS["text_muted"],
+                "color": color,
                 "directed": "true" if directed else "false",
             },
         })

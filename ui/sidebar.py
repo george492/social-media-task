@@ -186,6 +186,44 @@ def build_coloring_card() -> html.Div:
                     "border": f"1px solid {COLORS['border']}",
                     "borderRadius": "6px",
                     "fontSize": "13px",
+                    "marginBottom": "10px",
+                },
+                className="dark-dropdown",
+            ),
+
+            html.Label("Label Nodes By", style=STYLE_LABEL),
+            dcc.Dropdown(
+                id="dropdown-label-by",
+                options=[
+                    {"label": "ID", "value": "id"},
+                ],
+                value="id",
+                clearable=False,
+                style={
+                    "backgroundColor": COLORS["bg_dark"],
+                    "color": COLORS["text_primary"],
+                    "border": f"1px solid {COLORS['border']}",
+                    "borderRadius": "6px",
+                    "fontSize": "13px",
+                    "marginBottom": "10px",
+                },
+                className="dark-dropdown",
+            ),
+
+            html.Label("Color Edges By", style=STYLE_LABEL),
+            dcc.Dropdown(
+                id="dropdown-edge-color-by",
+                options=[
+                    {"label": "Uniform", "value": "uniform"},
+                ],
+                value="uniform",
+                clearable=False,
+                style={
+                    "backgroundColor": COLORS["bg_dark"],
+                    "color": COLORS["text_primary"],
+                    "border": f"1px solid {COLORS['border']}",
+                    "borderRadius": "6px",
+                    "fontSize": "13px",
                 },
                 className="dark-dropdown",
             ),

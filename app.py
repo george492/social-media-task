@@ -335,6 +335,8 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
     Input("dropdown-layout", "value"),
     Input("dropdown-color-by", "value"),
     Input("dropdown-size-by", "value"),
+    Input("dropdown-label-by", "value"),
+    Input("dropdown-edge-color-by", "value"),
     Input("slider-node-size", "value"),
     Input("slider-edge-thickness", "value"),
     Input("filter-degree", "value"),
@@ -345,7 +347,7 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
 )
 def render_graph(
     graph_json, community_json, centralities_json,
-    layout_name, color_by, size_by,
+    layout_name, color_by, size_by, label_by, edge_color_by,
     node_size, edge_thickness,
     filter_degree, filter_betweenness, filter_closeness,
     overrides_json,
@@ -405,6 +407,25 @@ def render_graph(
             node_colors = _get_centrality_colors(closeness_scores, "hot")
         elif color_by == "group":
             node_colors = _get_group_colors(G)
+        elif color_by and color_by.startswith("node_"):
+            attr = color_by[5:]
+            attr_vals = {str(n): G.nodes[n].get(attr) for n in G.nodes() if attr in G.nodes[n]}
+            try:
+                floats = {k: float(v) for k, v in attr_vals.items()}
+                node_colors = _get_centrality_colors(floats, "viridis")
+                # Fill missing nodes
+                for n in G.nodes():
+                    if str(n) not in node_colors:
+                        node_colors[str(n)] = COLORS["text_muted"]
+            except ValueError:
+                # Categorical mapping
+                unique_vals = list(set(attr_vals.values()))
+                palette = COLORS["node_communities"]
+                val_to_color = {val: palette[i % len(palette)] for i, val in enumerate(unique_vals)}
+                node_colors = {k: val_to_color[v] for k, v in attr_vals.items()}
+                for n in G.nodes():
+                    if str(n) not in node_colors:
+                        node_colors[str(n)] = COLORS["text_muted"]
         else:
             node_colors = {str(n): COLORS["accent_blue"] for n in G.nodes()}
 
@@ -419,8 +440,42 @@ def render_graph(
         elif size_by == "degree" and centralities:
             degree_scores = {n: v["degree"] for n, v in centralities.items()}
             node_sizes = scale_values(degree_scores, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
+        elif size_by and size_by.startswith("node_"):
+            attr = size_by[5:]
+            try:
+                floats = {str(n): float(G.nodes[n].get(attr, 0)) for n in G.nodes()}
+                node_sizes = scale_values(floats, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
+            except ValueError:
+                node_sizes = {str(n): base_ns for n in G.nodes()}
         else:
             node_sizes = {str(n): base_ns for n in G.nodes()}
+
+        # ── Edge Colors ──────────────────────────────────────────────────
+        edge_colors = {}
+        if edge_color_by and edge_color_by.startswith("edge_"):
+            attr = edge_color_by[5:]
+            edge_vals = {}
+            for u, v, d in G.edges(data=True):
+                if attr in d:
+                    edge_vals[(u, v)] = d[attr]
+                    
+            try:
+                floats = {k: float(v) for k, v in edge_vals.items()}
+                if floats:
+                    min_val, max_val = min(floats.values()), max(floats.values())
+                    import matplotlib.pyplot as plt
+                    import matplotlib.colors as mcolors
+                    cmap = plt.get_cmap("coolwarm")
+                    for k, v in floats.items():
+                        norm_v = (v - min_val) / (max_val - min_val) if max_val > min_val else 0.5
+                        r, g, b, _ = cmap(norm_v)
+                        edge_colors[k] = mcolors.to_hex((r, g, b))
+            except ValueError:
+                unique_vals = list(set(edge_vals.values()))
+                palette = COLORS["node_communities"]
+                val_to_color = {val: palette[i % len(palette)] for i, val in enumerate(unique_vals)}
+                for k, v in edge_vals.items():
+                    edge_colors[k] = val_to_color[v]
 
         # ── Build elements ────────────────────────────────────────────────
         overrides = json.loads(overrides_json) if overrides_json else {}
@@ -429,14 +484,28 @@ def render_graph(
         for node_id_ov, ov in overrides.items():
             if "color" in ov:
                 node_colors[str(node_id_ov)] = ov["color"]
+                
+        # Handle label mapping
+        label_map = {}
+        if label_by and label_by.startswith("node_"):
+            attr = label_by[5:]
+            for n in G.nodes():
+                if attr in G.nodes[n]:
+                    label_map[str(n)] = str(G.nodes[n][attr])
+                    
+        # Apply manual overrides on top of mapped labels
+        for node_id_ov, ov in overrides.items():
+            if "label" in ov:
+                label_map[str(node_id_ov)] = ov["label"]
 
         elements = build_cytoscape_elements(
             subG, positions, node_colors, node_sizes,
+            edge_colors=edge_colors,
             base_node_size=base_ns,
             base_edge_thickness=float(edge_thickness or 2),
             directed=directed,
             hidden_nodes=set(),  # Already filtered via subG
-            label_overrides={str(k): v["label"] for k, v in overrides.items() if "label" in v},
+            label_overrides=label_map,
         )
 
         n_vis = len(visible_nodes)
@@ -560,6 +629,68 @@ def update_community_panels(comparison_json, community_json, graph_json, nodes_j
             print(f"[eval callback] {e}")
 
     return comparison_widget, eval_widget
+
+
+# 8.5. Dynamic Visual Dropdown Options ────────────────────────────────────────
+@app.callback(
+    Output("dropdown-color-by", "options"),
+    Output("dropdown-size-by", "options"),
+    Output("dropdown-label-by", "options"),
+    Output("dropdown-edge-color-by", "options"),
+    Input("store-graph-data", "data"),
+    prevent_initial_call=True,
+)
+def update_dropdown_options(graph_json):
+    color_opts = [
+        {"label": "Uniform", "value": "uniform"},
+        {"label": "Community", "value": "community"},
+        {"label": "Degree", "value": "degree"},
+        {"label": "PageRank", "value": "pagerank"},
+        {"label": "Betweenness", "value": "betweenness"},
+        {"label": "Closeness", "value": "closeness"},
+    ]
+    size_opts = [
+        {"label": "Uniform", "value": "uniform"},
+        {"label": "Degree", "value": "degree"},
+        {"label": "PageRank", "value": "pagerank"},
+        {"label": "Betweenness", "value": "betweenness"},
+    ]
+    label_opts = [{"label": "ID", "value": "id"}]
+    edge_color_opts = [{"label": "Uniform", "value": "uniform"}]
+
+    if not graph_json:
+        return color_opts, size_opts, label_opts, edge_color_opts
+
+    try:
+        meta = json.loads(graph_json)
+        
+        # Node attributes
+        node_attrs = set()
+        for n in meta.get("nodes", []):
+            for k in n.keys():
+                if k != "id":
+                    node_attrs.add(k)
+                    
+        for attr in sorted(list(node_attrs)):
+            label = attr.replace("_", " ").title()
+            color_opts.append({"label": f"Node: {label}", "value": f"node_{attr}"})
+            size_opts.append({"label": f"Node: {label}", "value": f"node_{attr}"})
+            label_opts.append({"label": f"Node: {label}", "value": f"node_{attr}"})
+            
+        # Edge attributes
+        edge_attrs = set()
+        for e in meta.get("edges", []):
+            for k in e.keys():
+                if k not in ("source", "target"):
+                    edge_attrs.add(k)
+                    
+        for attr in sorted(list(edge_attrs)):
+            label = attr.replace("_", " ").title()
+            edge_color_opts.append({"label": f"Edge: {label}", "value": f"edge_{attr}"})
+            
+        return color_opts, size_opts, label_opts, edge_color_opts
+    except Exception:
+        return color_opts, size_opts, label_opts, edge_color_opts
 
 
 # 10. Node info panel on click ─────────────────────────────────────────────────
