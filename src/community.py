@@ -170,15 +170,23 @@ def compare_algorithms(G: nx.Graph, gn_k: int = 4) -> Dict[str, Any]:
     """
     results = {}
 
-    # Girvan-Newman
-    gn_communities = detect_girvan_newman(G, num_communities=gn_k)
-    gn_partition = partition_from_list(gn_communities)
-    gn_modularity = compute_modularity(G, gn_partition)
-    results["girvan_newman"] = {
-        "num_communities": len(gn_communities),
-        "modularity": gn_modularity,
-        "partition": gn_partition,
-    }
+    # Girvan-Newman - Skip for large dense graphs as it's O(V * E^2) and too slow
+    n_edges = G.number_of_edges()
+    if n_edges <= 1000 and G.number_of_nodes() <= 500:
+        gn_communities = detect_girvan_newman(G, num_communities=gn_k)
+        gn_partition = partition_from_list(gn_communities)
+        gn_modularity = compute_modularity(G, gn_partition)
+        results["girvan_newman"] = {
+            "num_communities": len(gn_communities),
+            "modularity": gn_modularity,
+            "partition": gn_partition,
+        }
+    else:
+        results["girvan_newman"] = {
+            "num_communities": 0,
+            "modularity": 0.0,
+            "partition": {}, 
+        }
 
     # Louvain
     louvain_partition = detect_louvain(G)

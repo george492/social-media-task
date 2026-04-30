@@ -32,7 +32,14 @@ def get_spring_layout(G: nx.Graph, seed: int = 42) -> Dict[str, Tuple[float, flo
     Returns:
         Dict mapping node_id -> (x, y) position tuple.
     """
-    pos = nx.spring_layout(G, seed=seed, k=1.5 / np.sqrt(max(G.number_of_nodes(), 1)))
+    n_nodes = G.number_of_nodes()
+    iters = 50
+    if n_nodes > 1000:
+        iters = 10
+    elif n_nodes > 500:
+        iters = 25
+        
+    pos = nx.spring_layout(G, seed=seed, k=1.5 / np.sqrt(max(n_nodes, 1)), iterations=iters)
     return {str(n): (float(p[0]), float(p[1])) for n, p in pos.items()}
 
 
@@ -75,19 +82,25 @@ def get_kamada_kawai_layout(G: nx.Graph) -> Dict[str, Tuple[float, float]]:
                 node = list(subgraph.nodes())[0]
                 pos[node] = (x_offset, 0.0)
             else:
-                try:
-                    sub_pos = nx.kamada_kawai_layout(subgraph)
-                except Exception:
-                    sub_pos = nx.spring_layout(subgraph, seed=42)
+                if subgraph.number_of_nodes() > 300:
+                    sub_pos = nx.spring_layout(subgraph, seed=42, iterations=15)
+                else:
+                    try:
+                        sub_pos = nx.kamada_kawai_layout(subgraph)
+                    except Exception:
+                        sub_pos = nx.spring_layout(subgraph, seed=42)
                 for n, p in sub_pos.items():
                     pos[n] = (p[0] + x_offset, p[1])
             x_offset += 2.5
         return {str(n): (float(p[0]), float(p[1])) for n, p in pos.items()}
 
-    try:
-        raw = nx.kamada_kawai_layout(base)
-    except Exception:
-        raw = nx.spring_layout(base, seed=42)
+    if base.number_of_nodes() > 300:
+        raw = nx.spring_layout(base, seed=42, iterations=15)
+    else:
+        try:
+            raw = nx.kamada_kawai_layout(base)
+        except Exception:
+            raw = nx.spring_layout(base, seed=42)
     return {str(n): (float(p[0]), float(p[1])) for n, p in raw.items()}
 
 

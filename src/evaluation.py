@@ -83,6 +83,10 @@ def performance_score(G: nx.Graph, partition: Dict[str, int]) -> float:
     if G is None or G.number_of_nodes() < 2 or not partition:
         return 0.0
 
+    # Performance is O(V^2) as it checks all pairs. Skip for large graphs.
+    if G.number_of_nodes() > 1000:
+        return 0.0
+
     base = G.to_undirected() if G.is_directed() else G
     community_ids = set(partition.values())
     communities = [

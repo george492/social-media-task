@@ -60,8 +60,8 @@ app.layout = html.Div(
         dcc.Store(id="store-centralities"), # {node: {metric: value}} JSON
         dcc.Store(id="store-community"),   # current active partition dict JSON
         dcc.Store(id="store-comparison"),  # full comparison result JSON
-        dcc.Store(id="store-pagerank"),    # pagerank scores JSON
-        dcc.Store(id="store-betweenness"), # betweenness scores JSON
+        dcc.Store(id="store-stats"),       # graph stats JSON
+        dcc.Store(id="store-degree-dist"), # degree distribution JSON
         dcc.Store(id="store-node-overrides", data="{}"),  # per-node {id: {color, label}}
         dcc.Store(id="store-selected-node"),              # currently tapped node id
         dcc.Store(id="store-color-picker-value", data="#58a6ff"),  # mirrors html.Input color
@@ -208,8 +208,8 @@ def store_edges(contents, n_clicks, filename):
 @app.callback(
     Output("store-graph-data", "data"),
     Output("store-centralities", "data"),
-    Output("store-pagerank", "data"),
-    Output("store-betweenness", "data"),
+    Output("store-stats", "data"),
+    Output("store-degree-dist", "data"),
     Output("header-status", "children"),
     Input("btn-build-graph", "n_clicks"),
     Input("btn-load-sample", "n_clicks"),
@@ -242,34 +242,59 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
         G = load_graph_from_dataframes(nodes_df, edges_df, directed=directed)
 
         centralities = compute_centralities(G)
-        pagerank = compute_pagerank(G)
-        betweenness = compute_betweenness_centrality(G)
+        stats = compute_graph_stats(G)
+        degree_dist = compute_degree_distribution(G)
 
         summary = get_graph_summary(G)
+        
+        # Determine if we should sample for rendering
+        MAX_NODES = 1000
+        MAX_EDGES = 3000
+        
         status = (
             f"Graph: {summary['num_nodes']} nodes, {summary['num_edges']} edges — "
             f"{'Directed' if summary['is_directed'] else 'Undirected'} — "
             f"{'Connected' if summary['is_connected'] else 'Disconnected'}"
         )
+        
+        render_G = G
+        if G.number_of_nodes() > MAX_NODES or G.number_of_edges() > MAX_EDGES:
+            status += " (Visualization Capped)"
+            render_G = nx.DiGraph() if directed else nx.Graph()
+            
+            top_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)[:MAX_NODES]
+            added_edges = 0
+            for n, d in top_nodes:
+                render_G.add_node(n, **G.nodes[n])
+                for u, v, edata in G.edges(n, data=True):
+                    if not render_G.has_edge(u, v):
+                        if u not in render_G: render_G.add_node(u, **G.nodes[u])
+                        if v not in render_G: render_G.add_node(v, **G.nodes[v])
+                        render_G.add_edge(u, v, **edata)
+                        added_edges += 1
+                        if added_edges >= MAX_EDGES:
+                            break
+                if added_edges >= MAX_EDGES:
+                    break
 
         # Serialize graph data as JSON-safe dict
         graph_meta = {
             "directed": directed,
             "nodes": [
-                {"id": str(n), **{k: str(v) for k, v in G.nodes[n].items()}}
-                for n in G.nodes()
+                {"id": str(n), **{k: str(v) for k, v in render_G.nodes[n].items()}}
+                for n in render_G.nodes()
             ],
             "edges": [
                 {"source": str(u), "target": str(v), **{k: str(v2) for k, v2 in d.items()}}
-                for u, v, d in G.edges(data=True)
+                for u, v, d in render_G.edges(data=True)
             ],
         }
 
         return (
             json.dumps(graph_meta),
             json.dumps(centralities),
-            json.dumps(pagerank),
-            json.dumps(betweenness),
+            json.dumps(stats),
+            json.dumps(degree_dist),
             status,
         )
     except Exception as e:
@@ -331,8 +356,6 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
     Input("store-graph-data", "data"),
     Input("store-community", "data"),
     Input("store-centralities", "data"),
-    Input("store-pagerank", "data"),
-    Input("store-betweenness", "data"),
     Input("dropdown-layout", "value"),
     Input("dropdown-color-by", "value"),
     Input("dropdown-size-by", "value"),
@@ -346,7 +369,6 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
 )
 def render_graph(
     graph_json, community_json, centralities_json,
-    pagerank_json, betweenness_json,
     layout_name, color_by, size_by,
     node_size, edge_thickness,
     filter_degree, filter_betweenness, filter_closeness,
@@ -359,8 +381,6 @@ def render_graph(
         graph_meta = json.loads(graph_json)
         directed = graph_meta.get("directed", False)
         centralities = json.loads(centralities_json) if centralities_json else {}
-        pagerank = json.loads(pagerank_json) if pagerank_json else {}
-        betweenness = json.loads(betweenness_json) if betweenness_json else {}
         community = json.loads(community_json) if community_json else {}
 
         # Rebuild NetworkX graph from stored meta
@@ -395,10 +415,12 @@ def render_graph(
         # ── Node Colors ──────────────────────────────────────────────────
         if color_by == "community" and community:
             node_colors = _get_community_colors(community)
-        elif color_by == "pagerank" and pagerank:
-            node_colors = _get_centrality_colors(pagerank, "plasma")
-        elif color_by == "betweenness" and betweenness:
-            node_colors = _get_centrality_colors(betweenness, "magma")
+        elif color_by == "pagerank" and centralities:
+            scores = {n: v["pagerank"] for n, v in centralities.items() if "pagerank" in v}
+            node_colors = _get_centrality_colors(scores, "plasma")
+        elif color_by == "betweenness" and centralities:
+            scores = {n: v["betweenness"] for n, v in centralities.items() if "betweenness" in v}
+            node_colors = _get_centrality_colors(scores, "magma")
         elif color_by == "degree" and centralities:
             degree_scores = {n: v["degree"] for n, v in centralities.items()}
             node_colors = _get_centrality_colors(degree_scores, "viridis")
@@ -412,10 +434,12 @@ def render_graph(
 
         # ── Node Sizes ───────────────────────────────────────────────────
         base_ns = float(node_size or 18)
-        if size_by == "pagerank" and pagerank:
-            node_sizes = scale_values(pagerank, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
-        elif size_by == "betweenness" and betweenness:
-            node_sizes = scale_values(betweenness, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
+        if size_by == "pagerank" and centralities:
+            scores = {n: v["pagerank"] for n, v in centralities.items() if "pagerank" in v}
+            node_sizes = scale_values(scores, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
+        elif size_by == "betweenness" and centralities:
+            scores = {n: v["betweenness"] for n, v in centralities.items() if "betweenness" in v}
+            node_sizes = scale_values(scores, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
         elif size_by == "degree" and centralities:
             degree_scores = {n: v["degree"] for n, v in centralities.items()}
             node_sizes = scale_values(degree_scores, min_size=base_ns * 0.5, max_size=base_ns * 2.5)
@@ -455,20 +479,14 @@ def render_graph(
 # 6. Stats bar ─────────────────────────────────────────────────────────────────
 @app.callback(
     Output("stats-bar", "children"),
-    Input("store-graph-data", "data"),
+    Input("store-stats", "data"),
     prevent_initial_call=True,
 )
-def update_stats(graph_json):
-    if not graph_json:
+def update_stats(stats_json):
+    if not stats_json:
         return build_stats_bar({})
     try:
-        meta = json.loads(graph_json)
-        G = nx.DiGraph() if meta.get("directed") else nx.Graph()
-        for n in meta["nodes"]:
-            G.add_node(n["id"])
-        for e in meta["edges"]:
-            G.add_edge(e["source"], e["target"])
-        stats = compute_graph_stats(G)
+        stats = json.loads(stats_json)
         return build_stats_bar(stats)
     except Exception as e:
         return build_stats_bar({})
@@ -477,20 +495,16 @@ def update_stats(graph_json):
 # 7. Degree distribution chart ────────────────────────────────────────────────
 @app.callback(
     Output("degree-dist-chart", "children"),
-    Input("store-graph-data", "data"),
+    Input("store-degree-dist", "data"),
     prevent_initial_call=True,
 )
-def update_degree_dist(graph_json):
-    if not graph_json:
+def update_degree_dist(dist_json):
+    if not dist_json:
         return build_degree_distribution_chart({})
     try:
-        meta = json.loads(graph_json)
-        G = nx.DiGraph() if meta.get("directed") else nx.Graph()
-        for n in meta["nodes"]:
-            G.add_node(n["id"])
-        for e in meta["edges"]:
-            G.add_edge(e["source"], e["target"])
-        dist = compute_degree_distribution(G)
+        dist = json.loads(dist_json)
+        # Parse keys as integers (JSON dumps them as strings)
+        dist = {int(k): v for k, v in dist.items()}
         return build_degree_distribution_chart(dist)
     except Exception:
         return build_degree_distribution_chart({})

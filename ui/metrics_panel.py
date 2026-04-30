@@ -157,7 +157,6 @@ def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
                 f"{val:.4f}",
                 style={"color": color, "fontWeight": "700", "fontSize": "13px", "padding": "5px 8px", "textAlign": "right"},
             ),
-            html.Td(desc, style={"color": COLORS["text_muted"], "fontSize": "11px", "padding": "5px 8px"}),
         ]))
 
     return html.Table(
@@ -166,7 +165,6 @@ def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
             html.Thead(html.Tr([
                 html.Th("Metric", style={"color": COLORS["text_muted"], "fontSize": "11px", "textAlign": "left", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}),
                 html.Th("Score", style={"color": COLORS["text_muted"], "fontSize": "11px", "textAlign": "right", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}),
-                html.Th("Description", style={"color": COLORS["text_muted"], "fontSize": "11px", "textAlign": "left", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}),
             ])),
             html.Tbody(rows),
         ],

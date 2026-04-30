@@ -77,7 +77,8 @@ def load_graph_from_dataframes(
         if "id" not in nodes_df.columns:
             raise ValueError(f"Nodes CSV must contain an 'id' column. Found columns: {list(nodes_df.columns)}")
 
-        for _, row in nodes_df.iterrows():
+        records = nodes_df.to_dict("records")
+        for row in records:
             node_id = str(row["id"])
             attrs = {k: v for k, v in row.items() if k != "id"}
             # Provide default label if missing
@@ -100,10 +101,11 @@ def load_graph_from_dataframes(
             if col not in edges_df.columns:
                 raise ValueError(f"Edges CSV must contain a '{col}' column. Found columns: {list(edges_df.columns)}")
 
-        for _, row in edges_df.iterrows():
+        records = edges_df.to_dict("records")
+        for row in records:
             src = str(row["source"])
             tgt = str(row["target"])
-            weight = float(row.get("weight", 1.0)) if "weight" in row.index else 1.0
+            weight = float(row.get("weight", 1.0)) if "weight" in row else 1.0
             attrs = {k: v for k, v in row.items() if k not in ("source", "target")}
             attrs["weight"] = weight
 

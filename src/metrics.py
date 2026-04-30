@@ -73,11 +73,12 @@ def compute_average_path_length(G: nx.Graph) -> float:
     if subgraph.number_of_nodes() < 2:
         return 0.0
         
-    # For very large graphs, this is extremely slow. Skip or approximate.
-    if subgraph.number_of_nodes() > 1000:
-        # Approximate by sampling 100 random nodes
+    # For dense or large graphs, this is extremely slow. Skip or approximate aggressively.
+    if subgraph.number_of_nodes() > 200 or subgraph.number_of_edges() > 1000:
+        # Approximate by sampling 10 random nodes
         import random
-        sampled_nodes = random.sample(list(subgraph.nodes()), 100)
+        k_path = min(subgraph.number_of_nodes(), 10)
+        sampled_nodes = random.sample(list(subgraph.nodes()), k_path)
         total_length = 0
         paths = 0
         for n in sampled_nodes:
@@ -111,17 +112,19 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
         return {}
 
     n_nodes = G.number_of_nodes()
-    # Use approximation for large graphs to prevent freezing
-    k_approx = min(n_nodes, 100) if n_nodes > 500 else None
+    n_edges = G.number_of_edges()
+    # Aggressive approximation for dense or large graphs to prevent freezing
+    k_approx = min(n_nodes, 10) if (n_nodes > 200 or n_edges > 1000) else None
 
     degree_c = nx.degree_centrality(G)
     betweenness_c = nx.betweenness_centrality(G, k=k_approx, normalized=True)
     
     # Closeness centrality doesn't support k= sampling natively in standard NetworkX
-    # For huge graphs, calculate for a sample and default the rest to 0
-    if n_nodes > 1000:
+    # For huge graphs, calculate for a tiny sample and default the rest to 0
+    if n_nodes > 100:
         import random
-        sampled = random.sample(list(G.nodes()), 100)
+        k_closeness = min(n_nodes, 10)
+        sampled = random.sample(list(G.nodes()), k_closeness)
         closeness_c = {n: nx.closeness_centrality(G, u=n) for n in sampled}
     else:
         closeness_c = nx.closeness_centrality(G)
