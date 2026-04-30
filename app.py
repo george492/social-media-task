@@ -246,47 +246,23 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
         degree_dist = compute_degree_distribution(G)
 
         summary = get_graph_summary(G)
-        
-        # Determine if we should sample for rendering
-        MAX_NODES = 1000
-        MAX_EDGES = 3000
-        
+
         status = (
             f"Graph: {summary['num_nodes']} nodes, {summary['num_edges']} edges — "
             f"{'Directed' if summary['is_directed'] else 'Undirected'} — "
             f"{'Connected' if summary['is_connected'] else 'Disconnected'}"
         )
         
-        render_G = G
-        if G.number_of_nodes() > MAX_NODES or G.number_of_edges() > MAX_EDGES:
-            status += " (Visualization Capped)"
-            render_G = nx.DiGraph() if directed else nx.Graph()
-            
-            top_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)[:MAX_NODES]
-            added_edges = 0
-            for n, d in top_nodes:
-                render_G.add_node(n, **G.nodes[n])
-                for u, v, edata in G.edges(n, data=True):
-                    if not render_G.has_edge(u, v):
-                        if u not in render_G: render_G.add_node(u, **G.nodes[u])
-                        if v not in render_G: render_G.add_node(v, **G.nodes[v])
-                        render_G.add_edge(u, v, **edata)
-                        added_edges += 1
-                        if added_edges >= MAX_EDGES:
-                            break
-                if added_edges >= MAX_EDGES:
-                    break
-
-        # Serialize graph data as JSON-safe dict
+        # Serialize full graph data as JSON-safe dict
         graph_meta = {
             "directed": directed,
             "nodes": [
-                {"id": str(n), **{k: str(v) for k, v in render_G.nodes[n].items()}}
-                for n in render_G.nodes()
+                {"id": str(n), **{k: str(v) for k, v in G.nodes[n].items()}}
+                for n in G.nodes()
             ],
             "edges": [
                 {"source": str(u), "target": str(v), **{k: str(v2) for k, v2 in d.items()}}
-                for u, v, d in render_G.edges(data=True)
+                for u, v, d in G.edges(data=True)
             ],
         }
 
@@ -490,6 +466,33 @@ def update_stats(stats_json):
         return build_stats_bar(stats)
     except Exception as e:
         return build_stats_bar({})
+
+
+# 6.5. Update Degree Slider Range ──────────────────────────────────────────────
+@app.callback(
+    Output("filter-degree", "max"),
+    Output("filter-degree", "marks"),
+    Output("filter-degree", "value"),
+    Input("store-stats", "data"),
+    prevent_initial_call=True,
+)
+def update_degree_slider(stats_json):
+    if not stats_json:
+        return 1, {0: "0", 1: "1"}, [0, 1]
+    try:
+        stats = json.loads(stats_json)
+        max_deg = stats.get("max_degree", 1)
+        if max_deg == 0:
+            max_deg = 1
+            
+        marks = {0: "0"}
+        if max_deg > 1:
+            marks[int(max_deg/2)] = str(int(max_deg/2))
+        marks[max_deg] = str(max_deg)
+        
+        return max_deg, marks, [0, max_deg]
+    except Exception:
+        return 1, {0: "0", 1: "1"}, [0, 1]
 
 
 # 7. Degree distribution chart ────────────────────────────────────────────────

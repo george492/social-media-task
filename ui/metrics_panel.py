@@ -78,13 +78,19 @@ def build_degree_distribution_chart(degree_dist: Dict[int, int]) -> dcc.Graph:
         textfont={"size": 9, "color": COLORS["text_secondary"]},
     ))
 
+    # Copy PLOTLY_LAYOUT and update it rather than passing multiple kwargs
+    layout = PLOTLY_LAYOUT.copy()
+    layout_xaxis = layout.get("xaxis", {}).copy()
+    layout_xaxis["title"] = "Degree"
+    layout_yaxis = layout.get("yaxis", {}).copy()
+    layout_yaxis["title"] = "Count"
+    
     fig.update_layout(
-        **PLOTLY_LAYOUT,
+        **layout,
         title={"text": "Degree Distribution", "font": {"size": 13}},
-        xaxis={"title": "Degree", **PLOTLY_LAYOUT["xaxis"]},
-        yaxis={"title": "Count", **PLOTLY_LAYOUT["yaxis"]},
         bargap=0.2,
     )
+    fig.update_layout(xaxis=layout_xaxis, yaxis=layout_yaxis)
 
     return dcc.Graph(figure=fig, style={"height": "200px"}, config={"displayModeBar": False})
 

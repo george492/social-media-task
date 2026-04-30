@@ -200,7 +200,7 @@ def build_centrality_filter_card() -> html.Div:
         children=[
             html.P("Centrality Filters", style=STYLE_SECTION_TITLE),
 
-            html.Label("Degree Centrality", style=STYLE_LABEL),
+            html.Label("Degree", style=STYLE_LABEL),
             dcc.RangeSlider(
                 id="filter-degree",
                 min=0, max=1, step=0.01,

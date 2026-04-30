@@ -116,7 +116,7 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
     # Aggressive approximation for dense or large graphs to prevent freezing
     k_approx = min(n_nodes, 10) if (n_nodes > 200 or n_edges > 1000) else None
 
-    degree_c = nx.degree_centrality(G)
+    degree_c = dict(G.degree())
     betweenness_c = nx.betweenness_centrality(G, k=k_approx, normalized=True)
     
     # Closeness centrality doesn't support k= sampling natively in standard NetworkX
