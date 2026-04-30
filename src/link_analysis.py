@@ -48,7 +48,11 @@ def compute_betweenness_centrality(G: nx.Graph, normalized: bool = True) -> Dict
     if G is None or G.number_of_nodes() == 0:
         return {}
 
-    bc = nx.betweenness_centrality(G, normalized=normalized)
+    n_nodes = G.number_of_nodes()
+    # If the graph is large (>500 nodes), approximate by randomly sampling 100 nodes
+    k_approx = min(n_nodes, 100) if n_nodes > 500 else None
+
+    bc = nx.betweenness_centrality(G, k=k_approx, normalized=normalized)
     return {str(node): round(score, 8) for node, score in bc.items()}
 
 

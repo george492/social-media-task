@@ -161,9 +161,10 @@ def _get_group_colors(G: nx.Graph) -> dict:
     Output("nodes-upload-status", "children"),
     Input("upload-nodes", "contents"),
     Input("btn-load-sample", "n_clicks"),
+    State("upload-nodes", "filename"),
     prevent_initial_call=True,
 )
-def store_nodes(contents, n_clicks):
+def store_nodes(contents, n_clicks, filename):
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
 
@@ -177,7 +178,8 @@ def store_nodes(contents, n_clicks):
     if contents:
         df = parse_upload(contents)
         if df is not None:
-            return df.to_json(), f"✔ Nodes loaded ({len(df)} rows)"
+            fname = filename or "Nodes"
+            return df.to_json(), f"✔ {fname} loaded ({len(df)} rows)"
         return no_update, "⚠ Failed to parse nodes file"
 
     return no_update, ""
@@ -189,9 +191,10 @@ def store_nodes(contents, n_clicks):
     Output("edges-upload-status", "children"),
     Input("upload-edges", "contents"),
     Input("btn-load-sample", "n_clicks"),
+    State("upload-edges", "filename"),
     prevent_initial_call=True,
 )
-def store_edges(contents, n_clicks):
+def store_edges(contents, n_clicks, filename):
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
 
@@ -205,7 +208,8 @@ def store_edges(contents, n_clicks):
     if contents:
         df = parse_upload(contents)
         if df is not None:
-            return df.to_json(), f"✔ Edges loaded ({len(df)} rows)"
+            fname = filename or "Edges"
+            return df.to_json(), f"✔ {fname} loaded ({len(df)} rows)"
         return no_update, "⚠ Failed to parse edges file"
 
     return no_update, ""
@@ -244,39 +248,45 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
         edges_df = pd.read_json(edges_json) if edges_json else None
 
     directed = (graph_type == "directed")
-    G = load_graph_from_dataframes(nodes_df, edges_df, directed=directed)
+    
+    try:
+        G = load_graph_from_dataframes(nodes_df, edges_df, directed=directed)
 
-    centralities = compute_centralities(G)
-    pagerank = compute_pagerank(G)
-    betweenness = compute_betweenness_centrality(G)
+        centralities = compute_centralities(G)
+        pagerank = compute_pagerank(G)
+        betweenness = compute_betweenness_centrality(G)
 
-    summary = get_graph_summary(G)
-    status = (
-        f"Graph: {summary['num_nodes']} nodes, {summary['num_edges']} edges — "
-        f"{'Directed' if summary['is_directed'] else 'Undirected'} — "
-        f"{'Connected' if summary['is_connected'] else 'Disconnected'}"
-    )
+        summary = get_graph_summary(G)
+        status = (
+            f"Graph: {summary['num_nodes']} nodes, {summary['num_edges']} edges — "
+            f"{'Directed' if summary['is_directed'] else 'Undirected'} — "
+            f"{'Connected' if summary['is_connected'] else 'Disconnected'}"
+        )
 
-    # Serialize graph data as JSON-safe dict
-    graph_meta = {
-        "directed": directed,
-        "nodes": [
-            {"id": str(n), **{k: str(v) for k, v in G.nodes[n].items()}}
-            for n in G.nodes()
-        ],
-        "edges": [
-            {"source": str(u), "target": str(v), **{k: str(v2) for k, v2 in d.items()}}
-            for u, v, d in G.edges(data=True)
-        ],
-    }
+        # Serialize graph data as JSON-safe dict
+        graph_meta = {
+            "directed": directed,
+            "nodes": [
+                {"id": str(n), **{k: str(v) for k, v in G.nodes[n].items()}}
+                for n in G.nodes()
+            ],
+            "edges": [
+                {"source": str(u), "target": str(v), **{k: str(v2) for k, v2 in d.items()}}
+                for u, v, d in G.edges(data=True)
+            ],
+        }
 
-    return (
-        json.dumps(graph_meta),
-        json.dumps(centralities),
-        json.dumps(pagerank),
-        json.dumps(betweenness),
-        status,
-    )
+        return (
+            json.dumps(graph_meta),
+            json.dumps(centralities),
+            json.dumps(pagerank),
+            json.dumps(betweenness),
+            status,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return no_update, no_update, no_update, no_update, f"⚠ Error building graph: {str(e)}"
 
 
 # 4. Run community detection ──────────────────────────────────────────────────

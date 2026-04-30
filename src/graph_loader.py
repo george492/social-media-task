@@ -64,8 +64,18 @@ def load_graph_from_dataframes(
 
     # --- Add nodes ---
     if nodes_df is not None and not nodes_df.empty:
+        # Standardise column names
+        nodes_df.columns = nodes_df.columns.str.strip().str.lower()
+        
+        # Map common synonyms
         if "id" not in nodes_df.columns:
-            raise ValueError("Nodes CSV must contain an 'id' column.")
+            for syn in ["node", "name", "user", "account"]:
+                if syn in nodes_df.columns:
+                    nodes_df.rename(columns={syn: "id"}, inplace=True)
+                    break
+                    
+        if "id" not in nodes_df.columns:
+            raise ValueError(f"Nodes CSV must contain an 'id' column. Found columns: {list(nodes_df.columns)}")
 
         for _, row in nodes_df.iterrows():
             node_id = str(row["id"])
@@ -77,9 +87,18 @@ def load_graph_from_dataframes(
 
     # --- Add edges ---
     if edges_df is not None and not edges_df.empty:
+        # Standardise column names
+        edges_df.columns = edges_df.columns.str.strip().str.lower()
+        
+        # Map common synonyms
+        if "source" not in edges_df.columns and "from" in edges_df.columns:
+            edges_df.rename(columns={"from": "source"}, inplace=True)
+        if "target" not in edges_df.columns and "to" in edges_df.columns:
+            edges_df.rename(columns={"to": "target"}, inplace=True)
+            
         for col in ["source", "target"]:
             if col not in edges_df.columns:
-                raise ValueError(f"Edges CSV must contain a '{col}' column.")
+                raise ValueError(f"Edges CSV must contain a '{col}' column. Found columns: {list(edges_df.columns)}")
 
         for _, row in edges_df.iterrows():
             src = str(row["source"])
