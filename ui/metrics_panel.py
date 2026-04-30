@@ -138,32 +138,52 @@ def build_community_comparison(comparison: Optional[Dict[str, Any]]) -> html.Div
 
 def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
     """Build the clustering evaluation metrics table."""
-    if not evaluation:
-        return html.Div(
-            "Run community detection to see evaluation metrics.",
-            style={"color": COLORS["text_muted"], "fontSize": "12px", "padding": "8px"},
-        )
-
-    metric_info = {
+    internal_metrics = {
         "modularity": ("Modularity Q", COLORS["accent_blue"], "Internal quality of communities"),
         "coverage": ("Coverage", COLORS["accent_green"], "Fraction of intra-community edges"),
         "performance": ("Performance", COLORS["accent_purple"], "Correctly classified node pairs"),
         "intra_inter_ratio": ("Intra/Inter Ratio", COLORS["accent_orange"], "Internal vs external edge ratio"),
+    }
+
+    external_metrics = {
         "nmi": ("NMI (vs Group)", COLORS["accent_red"], "Normalized Mutual Information with ground truth"),
     }
 
+    eval_dict = evaluation or {}
+
     rows = []
-    for key, (label, color, desc) in metric_info.items():
-        val = evaluation.get(key)
-        if val is None:
-            continue
+    for key, (label, color, desc) in internal_metrics.items():
+        val = eval_dict.get(key)
+        val_str = f"{val:.4f}" if val is not None else "—"
         rows.append(html.Tr([
             html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"}),
             html.Td(
-                f"{val:.4f}",
+                val_str,
                 style={"color": color, "fontWeight": "700", "fontSize": "13px", "padding": "5px 8px", "textAlign": "right"},
             ),
         ]))
+
+    rows.append(html.Tr([
+        html.Td(
+            html.Div([
+                html.Hr(style={"borderColor": COLORS["border"], "marginTop": "6px", "marginBottom": "6px"}),
+                html.Span("Metrics (External)", style={"color": COLORS["text_muted"], "fontSize": "11px", "fontWeight": "600", "textTransform": "uppercase"}),
+            ]),
+            colSpan=2,
+            style={"padding": "0 8px"}
+        )
+    ]))
+    
+    nmi_val = eval_dict.get("nmi")
+    nmi_str = f"{nmi_val:.4f}" if nmi_val is not None else "—"
+    label, color, desc = external_metrics["nmi"]
+    rows.append(html.Tr([
+        html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"}),
+        html.Td(
+            nmi_str,
+            style={"color": color, "fontWeight": "700", "fontSize": "13px", "padding": "5px 8px", "textAlign": "right"},
+        ),
+    ]))
 
     return html.Table(
         style={"width": "100%", "borderCollapse": "collapse"},
@@ -375,7 +395,7 @@ def build_metrics_panel() -> html.Div:
                             }),
                             html.Div(id="community-comparison"),
 
-                            html.P("Evaluation Metrics", style={
+                            html.P("Evaluation Metrics (Internal)", style={
                                 "color": COLORS["text_secondary"],
                                 "fontSize": "11px",
                                 "fontWeight": "600",

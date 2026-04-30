@@ -440,7 +440,7 @@ def format_node_info(node_data: dict, centralities: dict) -> List:
     ], style={"marginBottom": "10px"}))
 
     # Basic attributes
-    skip = {"id", "label", "color", "size", "directed"}
+    skip = {"id", "label", "color", "size", "directed", "timeStamp"}
     for key, val in node_data.items():
         if key in skip:
             continue

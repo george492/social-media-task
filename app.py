@@ -325,6 +325,8 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
         return no_update, no_update
 
 
+
+
 # 5. Render graph (cytoscape elements) ───────────────────────────────────────
 @app.callback(
     Output("cytoscape-graph", "elements"),
