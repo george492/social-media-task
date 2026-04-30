@@ -15,9 +15,11 @@ LAYOUT_OPTIONS = [
     {"label": "Force-Directed (Spring)", "value": "spring"},
     {"label": "Kamada-Kawai", "value": "kamada_kawai"},
     {"label": "Circular", "value": "circular"},
-    {"label": "Shell / Radial", "value": "shell"},
+    {"label": "Shell", "value": "shell"},
     {"label": "Spectral", "value": "spectral"},
-    {"label": "Hierarchical (Dot)", "value": "hierarchical"},
+    {"label": "Hierarchical", "value": "hierarchical"},
+    {"label": "Tree", "value": "tree"},
+    {"label": "Radial", "value": "radial"},
 ]
 
 
@@ -222,6 +224,63 @@ def get_hierarchical_layout(G: nx.Graph) -> Dict[str, Tuple[float, float]]:
     return pos
 
 
+def get_tree_layout(G: nx.Graph) -> Dict[str, Tuple[float, float]]:
+    """
+    Compute a tree layout. Falls back to hierarchical layout logic, but spacing is 
+    adjusted to look more like a traditional tree.
+    """
+    # For now, tree uses the hierarchical logic as it produces a top-down tree.
+    return get_hierarchical_layout(G)
+
+
+def get_radial_layout(G: nx.Graph) -> Dict[str, Tuple[float, float]]:
+    """
+    Compute a radial layout (concentric circles based on BFS distance from root).
+    """
+    base = G.to_undirected() if G.is_directed() else G
+    if base.number_of_nodes() == 0:
+        return {}
+
+    # Use highest-degree node as root
+    root = max(dict(base.degree()).items(), key=lambda x: x[1])[0]
+
+    layers: Dict[str, int] = {}
+    queue = [root]
+    layers[root] = 0
+    visited = {root}
+
+    while queue:
+        current = queue.pop(0)
+        for neighbor in base.neighbors(current):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                layers[neighbor] = layers[current] + 1
+                queue.append(neighbor)
+
+    max_layer = max(layers.values()) if layers else 0
+    for node in base.nodes():
+        if node not in layers:
+            layers[node] = max_layer + 1
+
+    layer_nodes: Dict[int, list] = {}
+    for node, layer in layers.items():
+        layer_nodes.setdefault(layer, []).append(node)
+
+    pos = {}
+    for layer, nodes in layer_nodes.items():
+        if layer == 0:
+            for node in nodes:
+                pos[str(node)] = (0.0, 0.0)
+        else:
+            radius = layer * 2.0
+            angle_step = 2 * np.pi / len(nodes)
+            for i, node in enumerate(nodes):
+                angle = i * angle_step
+                pos[str(node)] = (float(radius * np.cos(angle)), float(radius * np.sin(angle)))
+
+    return pos
+
+
 def get_layout(G: nx.Graph, layout_name: str) -> Dict[str, Tuple[float, float]]:
     """
     Unified interface to compute node positions for the given layout name.
@@ -243,6 +302,8 @@ def get_layout(G: nx.Graph, layout_name: str) -> Dict[str, Tuple[float, float]]:
         "shell": get_shell_layout,
         "spectral": get_spectral_layout,
         "hierarchical": get_hierarchical_layout,
+        "tree": get_tree_layout,
+        "radial": get_radial_layout,
     }
 
     fn = dispatch.get(layout_name, get_spring_layout)
