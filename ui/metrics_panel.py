@@ -384,49 +384,7 @@ def build_metrics_panel() -> html.Div:
                         ],
                     ),
 
-                    # Link analysis
-                    html.Div(
-                        style={
-                            "flex": "1",
-                            "borderRight": f"1px solid {COLORS['border']}",
-                            "padding": "10px 12px",
-                            "overflow": "auto",
-                        },
-                        children=[
-                            html.Div(id="link-analysis-table"),
-                        ],
-                    ),
 
-                    # Link prediction
-                    html.Div(
-                        style={
-                            "flex": "1.1",
-                            "padding": "10px 12px",
-                            "overflow": "auto",
-                        },
-                        children=[
-                            html.P("Link Prediction", style={
-                                "color": COLORS["text_secondary"],
-                                "fontSize": "11px",
-                                "fontWeight": "600",
-                                "letterSpacing": "0.08em",
-                                "textTransform": "uppercase",
-                                "marginBottom": "8px",
-                                "marginTop": "0",
-                            }),
-                            html.Div(id="link-prediction-table"),
-                            html.P("Prediction Accuracy", style={
-                                "color": COLORS["text_secondary"],
-                                "fontSize": "11px",
-                                "fontWeight": "600",
-                                "letterSpacing": "0.08em",
-                                "textTransform": "uppercase",
-                                "marginBottom": "6px",
-                                "marginTop": "12px",
-                            }),
-                            html.Div(id="link-prediction-eval"),
-                        ],
-                    ),
                 ],
             ),
         ],

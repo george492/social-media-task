@@ -28,7 +28,6 @@ from src.community import compare_algorithms, detect_louvain, detect_girvan_newm
 from src.layout import get_layout
 from src.link_analysis import compute_pagerank, compute_betweenness_centrality, get_top_nodes, scale_values, get_node_ranking_color
 from src.evaluation import evaluate_partition
-from src.link_prediction import predict_links, evaluate_link_prediction
 
 from ui.styles import COLORS, STYLE_APP, STYLE_HEADER, STYLE_MAIN
 from ui.sidebar import build_sidebar
@@ -39,9 +38,6 @@ from ui.metrics_panel import (
     build_degree_distribution_chart,
     build_community_comparison,
     build_evaluation_table,
-    build_top_nodes_table,
-    build_link_prediction_table,
-    build_link_prediction_eval,
 )
 
 # ─── App initialisation ───────────────────────────────────────────────────────
@@ -66,8 +62,6 @@ app.layout = html.Div(
         dcc.Store(id="store-comparison"),  # full comparison result JSON
         dcc.Store(id="store-pagerank"),    # pagerank scores JSON
         dcc.Store(id="store-betweenness"), # betweenness scores JSON
-        dcc.Store(id="store-lp-predictions"), # link prediction results JSON
-        dcc.Store(id="store-lp-evaluation"),  # link prediction eval JSON
         dcc.Store(id="store-node-overrides", data="{}"),  # per-node {id: {color, label}}
         dcc.Store(id="store-selected-node"),              # currently tapped node id
         dcc.Store(id="store-color-picker-value", data="#58a6ff"),  # mirrors html.Input color
@@ -347,8 +341,6 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
     Input("filter-degree", "value"),
     Input("filter-betweenness", "value"),
     Input("filter-closeness", "value"),
-    Input("check-link-analysis", "value"),
-    Input("slider-top-n", "value"),
     Input("store-node-overrides", "data"),
     prevent_initial_call=True,
 )
@@ -358,7 +350,7 @@ def render_graph(
     layout_name, color_by, size_by,
     node_size, edge_thickness,
     filter_degree, filter_betweenness, filter_closeness,
-    link_checks, top_n, overrides_json,
+    overrides_json,
 ):
     if not graph_json:
         return [], "No graph loaded"
@@ -399,16 +391,6 @@ def render_graph(
 
         subG = G.subgraph(visible_nodes)
         positions = get_layout(subG, layout_name or "spring")
-
-        # ── Link analysis highlight ───────────────────────────────────────
-        link_checks = link_checks or []
-        highlight_nodes = set()
-        if "pagerank" in link_checks and pagerank:
-            top = get_top_nodes(pagerank, top_n=int(top_n or 5))
-            highlight_nodes.update(n for n, _ in top)
-        if "betweenness" in link_checks and betweenness:
-            top = get_top_nodes(betweenness, top_n=int(top_n or 5))
-            highlight_nodes.update(n for n, _ in top)
 
         # ── Node Colors ──────────────────────────────────────────────────
         if color_by == "community" and community:
@@ -456,16 +438,6 @@ def render_graph(
             hidden_nodes=set(),  # Already filtered via subG
             label_overrides={str(k): v["label"] for k, v in overrides.items() if "label" in v},
         )
-
-        # Apply highlight classes for link analysis
-        if highlight_nodes:
-            for el in elements:
-                if "source" not in el["data"]:
-                    nid = el["data"]["id"]
-                    if nid in highlight_nodes:
-                        el["classes"] = "highlighted"
-                    else:
-                        el["classes"] = "faded"
 
         n_vis = len(visible_nodes)
         n_total = G.number_of_nodes()
@@ -571,43 +543,6 @@ def update_community_panels(comparison_json, community_json, graph_json, nodes_j
             print(f"[eval callback] {e}")
 
     return comparison_widget, eval_widget
-
-
-# 9. Link analysis top nodes table ────────────────────────────────────────────
-@app.callback(
-    Output("link-analysis-table", "children"),
-    Input("store-pagerank", "data"),
-    Input("store-betweenness", "data"),
-    Input("check-link-analysis", "value"),
-    Input("slider-top-n", "value"),
-    prevent_initial_call=True,
-)
-def update_link_analysis_table(pagerank_json, betweenness_json, link_checks, top_n):
-    link_checks = link_checks or []
-    top_n = int(top_n or 5)
-    widgets = []
-
-    if "pagerank" in link_checks and pagerank_json:
-        try:
-            pr = json.loads(pagerank_json)
-            top = get_top_nodes(pr, top_n=top_n)
-            widgets.append(build_top_nodes_table(top, "PageRank"))
-        except Exception:
-            pass
-
-    if "betweenness" in link_checks and betweenness_json:
-        try:
-            bc = json.loads(betweenness_json)
-            top = get_top_nodes(bc, top_n=top_n)
-            widgets.append(html.Div(style={"marginTop": "12px"}))
-            widgets.append(build_top_nodes_table(top, "Betweenness"))
-        except Exception:
-            pass
-
-    if not widgets:
-        return build_top_nodes_table([], "")
-
-    return html.Div(widgets)
 
 
 # 10. Node info panel on click ─────────────────────────────────────────────────

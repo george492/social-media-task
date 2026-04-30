@@ -284,36 +284,6 @@ def build_community_card() -> html.Div:
     )
 
 
-def build_link_analysis_card() -> html.Div:
-    """Build link analysis (PageRank) controls."""
-    return html.Div(
-        style=STYLE_CARD,
-        children=[
-            html.P("Link Analysis", style=STYLE_SECTION_TITLE),
-
-            html.Label("Highlight Top-N Influential Nodes", style=STYLE_LABEL),
-            dcc.Slider(
-                id="slider-top-n",
-                min=1, max=20, step=1, value=5,
-                marks={1: "1", 10: "10", 20: "20"},
-                tooltip={"placement": "bottom", "always_visible": False},
-            ),
-            html.Div(style={"marginBottom": "10px"}),
-
-            dcc.Checklist(
-                id="check-link-analysis",
-                options=[
-                    {"label": " Highlight by PageRank", "value": "pagerank"},
-                    {"label": " Highlight by Betweenness", "value": "betweenness"},
-                ],
-                value=[],
-                style={"color": COLORS["text_primary"], "fontSize": "13px"},
-                inputStyle={"marginRight": "5px", "accentColor": COLORS["accent_orange"]},
-                labelStyle={"display": "block", "marginBottom": "4px"},
-            ),
-        ],
-    )
-
 
 
 def build_sidebar() -> html.Div:
@@ -328,6 +298,5 @@ def build_sidebar() -> html.Div:
             build_coloring_card(),
             build_centrality_filter_card(),
             build_community_card(),
-            build_link_analysis_card(),
         ],
     )
