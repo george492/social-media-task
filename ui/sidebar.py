@@ -361,11 +361,11 @@ def build_community_card() -> html.Div:
                 id="gn-k-container",
                 style={"display": "none"},  # Hidden by default since Louvain is default
                 children=[
-                    html.Label("Girvan-Newman K (communities)", style=STYLE_LABEL),
+                    html.Label("Girvan-Newman K (max nodes per community)", style=STYLE_LABEL),
                     dcc.Slider(
                         id="slider-gn-k",
-                        min=2, max=10, step=1, value=4,
-                        marks={2: "2", 5: "5", 10: "10"},
+                        min=2, max=20, step=1, value=4,
+                        marks={2: "2", 10: "10", 20: "20"},
                         tooltip={"placement": "bottom", "always_visible": False},
                     ),
                     html.Div(style={"marginBottom": "10px"}),

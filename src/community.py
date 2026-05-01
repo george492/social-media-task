@@ -33,21 +33,19 @@ def _sanitize_weights(G: nx.Graph) -> nx.Graph:
     return H
 
 
-def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> Dict[str, Any]:
+def detect_girvan_newman(G: nx.Graph, max_nodes_per_community: Optional[int] = None) -> Dict[str, Any]:
     """
-    Detect communities using the Girvan-Newman algorithm, matching Gephi's implementation.
+    Detect communities using the Girvan-Newman algorithm.
 
     How it works:
     - Runs iteratively, removing the highest edge-betweenness edge one at a time.
     - Modularity Q is computed at every split.
     - The partition with the HIGHEST modularity is automatically selected as optimal.
-      (This is the correct GN behaviour — no k needed.)
 
-    Optional: pass num_communities=k to stop early once k communities are reached.
-              If None (default), runs to full completion and auto-selects best partition.
+    Optional: pass max_nodes_per_community=k to stop early once the maximum community
+              size is <= k.
 
-    For graphs with > 2000 edges, falls back to greedy modularity maximisation
-    (same limitation as Gephi on very dense graphs).
+    For graphs with > 2000 edges, falls back to greedy modularity maximisation.
     """
     _empty = {
         "history": [], "removed_edges": [],
@@ -59,26 +57,33 @@ def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> 
         return _empty
 
     # ── Density guard ─────────────────────────────────────────────────────────
-    # Gephi's GN requires removing E_cut edges before any split occurs.
-    # On ultra-dense graphs (avg degree >> 10) this can mean thousands of
-    # single-edge removals, each needing a full Brandes re-run — identical to
-    # Gephi's own limitation. For such graphs we fall back to NetworkX's greedy
-    # modularity maximisation which produces equivalent quality communities
-    # in O(E log E) time.
-    #
-    # Threshold: if edge-count > 2000, use fast fallback.
     base_check = G.to_undirected() if G.is_directed() else G
     if base_check.number_of_edges() > 2000:
         print(f"[Girvan-Newman] Graph too dense ({base_check.number_of_edges()} edges) — "
-              f"using greedy modularity maximisation (Gephi-equivalent for dense graphs).")
+              f"using greedy modularity maximisation.")
         base_check_str = nx.relabel_nodes(base_check, {n: str(n) for n in base_check.nodes()})
         communities = list(nx_comm.greedy_modularity_communities(base_check_str))
-        # If user requested a specific k, merge smallest communities down to that count
-        if num_communities is not None:
-            while len(communities) > num_communities and len(communities) > 1:
-                communities.sort(key=len)
-                merged = communities[0] | communities[1]
-                communities = [merged] + communities[2:]
+        
+        # Enforce max nodes constraint if requested via recursive splitting
+        if max_nodes_per_community is not None:
+            final_comms = []
+            queue = communities.copy()
+            while queue:
+                c = queue.pop(0)
+                if len(c) <= max_nodes_per_community:
+                    final_comms.append(c)
+                else:
+                    sub = base_check_str.subgraph(c)
+                    sub_comms = list(nx_comm.greedy_modularity_communities(sub))
+                    if len(sub_comms) == 1:
+                        # Cannot split further by modularity, chunk arbitrarily
+                        nodes = list(sub.nodes())
+                        for i in range(0, len(nodes), max_nodes_per_community):
+                            final_comms.append(set(nodes[i:i+max_nodes_per_community]))
+                    else:
+                        queue.extend(sub_comms)
+            communities = final_comms
+
         try:
             mod = round(nx_comm.modularity(base_check_str, communities), 6)
         except Exception:
@@ -118,8 +123,7 @@ def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> 
             return 0.0
 
     def _ebc(comp_nodes):
-        """Exact unweighted Brandes EBC for one component (Gephi-style).
-        Falls back to k=50 sampling for very large components (>500 nodes)."""
+        """Exact unweighted Brandes EBC for one component (Gephi-style)."""
         sub = H.subgraph(comp_nodes).copy()
         n = len(comp_nodes)
         if n > 500:
@@ -142,7 +146,7 @@ def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> 
     history: list       = []
     removed_edges: list = []
     iteration           = 0
-    max_removals        = H.number_of_edges()  # can never remove more than we have
+    max_removals        = H.number_of_edges()
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     while iteration < max_removals:
@@ -189,16 +193,18 @@ def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> 
             "modularity":      mod_score,
         })
 
-        # Step 5 — update best partition (always track highest Q)
+        # Step 5 — update best partition
         if mod_score > best_modularity:
             best_modularity = mod_score
             best_partition  = cur_part
 
-        # Step 6 — early stop only when k is explicitly given
-        if num_communities is not None and num_comms >= num_communities:
-            target_partition = cur_part
-            reached_target   = True
-            break
+        # Step 6 — early stop when max community size is <= k
+        if max_nodes_per_community is not None:
+            max_size = max(len(c) for c in cur_part) if cur_part else 0
+            if max_size <= max_nodes_per_community:
+                target_partition = cur_part
+                reached_target   = True
+                break
 
         # Also stop if all nodes are isolated
         if num_comms >= H.number_of_nodes() + len(isolated):
@@ -326,11 +332,12 @@ def compare_algorithms(G: nx.Graph, gn_k: int = 4, algo: str = "both") -> Dict[s
         # Pass k=None to let the algorithm auto-select the best partition by modularity.
         # If the user set a specific k (gn_k > 0), pass it as an early-stop hint.
         k_hint = int(gn_k) if gn_k and int(gn_k) > 1 else None
-        gn_result = detect_girvan_newman(G, num_communities=k_hint)
-        # optimal_communities = partition with highest Q (auto-detected)
-        gn_communities = gn_result["optimal_communities"]
+        gn_result = detect_girvan_newman(G, max_nodes_per_community=k_hint)
+        # We use target_communities to honor the user's max nodes constraint.
+        gn_communities = gn_result["target_communities"]
         gn_partition = partition_from_list(gn_communities)
-        gn_modularity = gn_result["optimal_modularity"]
+        # Recompute modularity for the target partition
+        gn_modularity = compute_modularity(G, gn_partition)
         results["girvan_newman"] = {
             "num_communities": len(gn_communities),
             "modularity": gn_modularity,
