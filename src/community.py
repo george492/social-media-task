@@ -154,13 +154,14 @@ def compute_modularity(G: nx.Graph, partition: Dict[str, int]) -> float:
         return 0.0
 
 
-def compare_algorithms(G: nx.Graph, gn_k: int = 4) -> Dict[str, Any]:
+def compare_algorithms(G: nx.Graph, gn_k: int = 4, algo: str = "both") -> Dict[str, Any]:
     """
     Run both Girvan-Newman and Louvain algorithms and return comparison metrics.
 
     Args:
         G: A NetworkX graph.
         gn_k: Number of communities for Girvan-Newman.
+        algo: Which algorithm to run: 'louvain', 'girvan_newman', or 'both'.
 
     Returns:
         Dict with keys 'girvan_newman' and 'louvain', each containing:
@@ -172,7 +173,7 @@ def compare_algorithms(G: nx.Graph, gn_k: int = 4) -> Dict[str, Any]:
 
     # Girvan-Newman - Skip for large dense graphs as it's O(V * E^2) and too slow
     n_edges = G.number_of_edges()
-    if n_edges <= 1000 and G.number_of_nodes() <= 500:
+    if algo in ["girvan_newman", "both"] and n_edges <= 1000 and G.number_of_nodes() <= 500:
         gn_communities = detect_girvan_newman(G, num_communities=gn_k)
         gn_partition = partition_from_list(gn_communities)
         gn_modularity = compute_modularity(G, gn_partition)
@@ -189,13 +190,20 @@ def compare_algorithms(G: nx.Graph, gn_k: int = 4) -> Dict[str, Any]:
         }
 
     # Louvain
-    louvain_partition = detect_louvain(G)
-    louvain_num = len(set(louvain_partition.values())) if louvain_partition else 0
-    louvain_modularity = compute_modularity(G, louvain_partition)
-    results["louvain"] = {
-        "num_communities": louvain_num,
-        "modularity": louvain_modularity,
-        "partition": louvain_partition,
-    }
+    if algo in ["louvain", "both"]:
+        louvain_partition = detect_louvain(G)
+        louvain_num = len(set(louvain_partition.values())) if louvain_partition else 0
+        louvain_modularity = compute_modularity(G, louvain_partition)
+        results["louvain"] = {
+            "num_communities": louvain_num,
+            "modularity": louvain_modularity,
+            "partition": louvain_partition,
+        }
+    else:
+        results["louvain"] = {
+            "num_communities": 0,
+            "modularity": 0.0,
+            "partition": {},
+        }
 
     return results

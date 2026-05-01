@@ -168,10 +168,17 @@ def compute_graph_stats(G: nx.Graph) -> Dict[str, Any]:
         return {}
 
     degrees = [d for _, d in G.degree()]
+    
+    # Use the directed average degree rule (|E| / |V|) for directed graphs
+    if G.is_directed():
+        avg_degree = G.number_of_edges() / G.number_of_nodes()
+    else:
+        avg_degree = np.mean(degrees)
+        
     stats = {
         "num_nodes": G.number_of_nodes(),
         "num_edges": G.number_of_edges(),
-        "avg_degree": round(np.mean(degrees), 3),
+        "avg_degree": round(avg_degree, 3),
         "max_degree": max(degrees),
         "min_degree": min(degrees),
         "density": round(nx.density(G), 4),

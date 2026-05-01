@@ -118,11 +118,11 @@ def build_community_comparison(comparison: Optional[Dict[str, Any]]) -> html.Div
                 html.Div(name, style={"color": color, "fontWeight": "700", "fontSize": "13px", "marginBottom": "10px"}),
                 html.Div([
                     html.Span("Communities: ", style={"color": COLORS["text_muted"], "fontSize": "11px"}),
-                    html.Span(str(data.get("num_communities", "—")), style={"color": COLORS["text_primary"], "fontWeight": "700", "fontSize": "14px"}),
+                    html.Span(str(data.get("num_communities", "—")) if data.get("num_communities", 0) > 0 else "—", style={"color": COLORS["text_primary"], "fontWeight": "700", "fontSize": "14px"}),
                 ], style={"marginBottom": "5px"}),
                 html.Div([
                     html.Span("Modularity: ", style={"color": COLORS["text_muted"], "fontSize": "11px"}),
-                    html.Span(f"{data.get('modularity', 0):.4f}", style={"color": color, "fontWeight": "700", "fontSize": "14px"}),
+                    html.Span(f"{data.get('modularity', 0):.4f}" if data.get("num_communities", 0) > 0 else "—", style={"color": color, "fontWeight": "700", "fontSize": "14px"}),
                 ]),
             ],
         )

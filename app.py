@@ -305,23 +305,33 @@ def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type,
         else:
             if not nodes_json and not edges_json:
                 return no_update, no_update
-            nodes_df = pd.read_json(nodes_json, dtype=str) if nodes_json else None
-            edges_df = pd.read_json(edges_json) if edges_json else None
+            from io import StringIO
+            nodes_df = pd.read_json(StringIO(nodes_json), dtype=str) if nodes_json else None
+            edges_df = pd.read_json(StringIO(edges_json)) if edges_json else None
             directed = (graph_type == "directed")
 
         G = load_graph_from_dataframes(nodes_df, edges_df, directed=directed)
-        comparison = compare_algorithms(G, gn_k=int(gn_k or 4))
+        comparison = compare_algorithms(G, gn_k=int(gn_k or 4), algo=algo)
 
-        # Select active partition based on chosen algorithm
+        gn_partition  = comparison["girvan_newman"].get("partition", {})
+        louv_partition = comparison["louvain"].get("partition", {})
+
+        # Pick the active partition to colour the graph with
         if algo == "girvan_newman":
-            active_partition = comparison["girvan_newman"]["partition"]
+            # Use GN; fall back to empty or Louvain if GN returned nothing (graph too large)
+            active_partition = gn_partition if gn_partition else {}
+        elif algo == "both":
+            # Show GN if it succeeded, otherwise Louvain
+            active_partition = gn_partition if gn_partition else louv_partition
         else:
-            # Default to Louvain
-            active_partition = comparison["louvain"]["partition"]
+            active_partition = louv_partition
 
+        print(f"[community] algo={algo}  gn_communities={comparison['girvan_newman']['num_communities']}  louvain_communities={comparison['louvain']['num_communities']}")
         return json.dumps(active_partition), json.dumps(comparison)
     except Exception as e:
+        import traceback
         print(f"[community callback] Error: {e}")
+        traceback.print_exc()
         return no_update, no_update
 
 
@@ -594,6 +604,7 @@ def update_degree_dist(dist_json):
     prevent_initial_call=True,
 )
 def update_community_panels(comparison_json, community_json, graph_json, nodes_json):
+    from io import StringIO
     comparison_widget = build_community_comparison(None)
     eval_widget = build_evaluation_table(None)
 
@@ -609,25 +620,40 @@ def update_community_panels(comparison_json, community_json, graph_json, nodes_j
             partition = json.loads(community_json)
             meta = json.loads(graph_json)
             G = nx.DiGraph() if meta.get("directed") else nx.Graph()
-            for n in meta["nodes"]:
-                G.add_node(n["id"])
-            for e in meta["edges"]:
-                G.add_edge(e["source"], e["target"])
+            
+            for n in meta.get("nodes", []):
+                G.add_node(str(n["id"]))
+                
+            for e in meta.get("edges", []):
+                try:
+                    w = float(e.get("weight", 1.0))
+                except (ValueError, TypeError):
+                    w = 1.0
+                G.add_edge(str(e["source"]), str(e["target"]), weight=w)
 
             # Extract ground-truth labels from nodes CSV if 'group' column exists
             true_labels = None
             if nodes_json:
                 try:
-                    ndf = pd.read_json(nodes_json, dtype=str)
+                    ndf = pd.read_json(StringIO(nodes_json), dtype=str)
                     if "group" in ndf.columns and "id" in ndf.columns:
-                        true_labels = {str(row["id"]): int(float(row["group"])) - 1 for _, row in ndf.iterrows()}
-                except Exception:
-                    pass
+                        true_labels = {}
+                        for _, row in ndf.iterrows():
+                            try:
+                                true_labels[str(row["id"])] = int(float(row["group"])) - 1
+                            except (ValueError, TypeError):
+                                pass
+                        if not true_labels:
+                            true_labels = None
+                except Exception as e:
+                    print(f"[eval] true_labels error: {e}")
 
             evaluation = evaluate_partition(G, partition, true_labels=true_labels)
             eval_widget = build_evaluation_table(evaluation)
         except Exception as e:
+            import traceback
             print(f"[eval callback] {e}")
+            traceback.print_exc()
 
     return comparison_widget, eval_widget
 
