@@ -33,209 +33,117 @@ def _sanitize_weights(G: nx.Graph) -> nx.Graph:
     return H
 
 
-def detect_girvan_newman(G: nx.Graph, max_nodes_per_community: Optional[int] = None) -> Dict[str, Any]:
+def _compute_ebc(G: nx.Graph) -> Dict[tuple, float]:
+    """
+    Computes edge betweenness centrality manually using Brandes' algorithm:
+    - BFS from each node to count shortest paths.
+    - Propagate edge credit from leaf nodes upward.
+    - Divide by 2 for undirected graphs.
+    """
+    betweenness = {tuple(sorted((u, v))): 0.0 for u, v in G.edges()}
+    nodes = list(G.nodes())
+    
+    for s in nodes:
+        S = []
+        P = {v: [] for v in nodes}
+        sigma = {v: 0.0 for v in nodes}
+        sigma[s] = 1.0
+        d = {v: -1 for v in nodes}
+        d[s] = 0
+        Q = [s]
+        
+        # Phase 1: BFS
+        while Q:
+            v = Q.pop(0)
+            S.append(v)
+            for w in G.neighbors(v):
+                if d[w] < 0:
+                    Q.append(w)
+                    d[w] = d[v] + 1
+                if d[w] == d[v] + 1:
+                    sigma[w] += sigma[v]
+                    P[w].append(v)
+                    
+        # Phase 2: Propagate credit from leaf nodes upward
+        delta = {v: 0.0 for v in nodes}
+        while S:
+            w = S.pop()
+            for v in P[w]:
+                if sigma[w] != 0:
+                    c = (sigma[v] / sigma[w]) * (1.0 + delta[w])
+                    edge = tuple(sorted((v, w)))
+                    betweenness[edge] += c
+                    delta[v] += c
+                
+    # Phase 3: Undirected graph -> divide final betweenness values by 2
+    for e in betweenness:
+        betweenness[e] /= 2.0
+        
+    return betweenness
+
+
+def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> Dict[str, Any]:
     """
     Detect communities using the Girvan-Newman algorithm.
-
-    How it works:
-    - Runs iteratively, removing the highest edge-betweenness edge one at a time.
-    - Modularity Q is computed at every split.
-    - The partition with the HIGHEST modularity is automatically selected as optimal.
-
-    Optional: pass max_nodes_per_community=k to stop early once the maximum community
-              size is <= k.
-
-    For graphs with > 2000 edges, falls back to greedy modularity maximisation.
+    Runs iteratively, removing the highest edge-betweenness edge one at a time.
+    Stops when the desired number of communities is reached, or no edges remain.
     """
-    _empty = {
-        "history": [], "removed_edges": [],
-        "optimal_communities": [], "optimal_modularity": 0.0,
-        "target_communities": [],
-    }
-
     if G is None or G.number_of_nodes() == 0:
-        return _empty
+        return {"target_communities": []}
 
-    # ── Density guard ─────────────────────────────────────────────────────────
-    base_check = G.to_undirected() if G.is_directed() else G
-    if base_check.number_of_edges() > 2000:
-        print(f"[Girvan-Newman] Graph too dense ({base_check.number_of_edges()} edges) — "
-              f"using greedy modularity maximisation.")
-        base_check_str = nx.relabel_nodes(base_check, {n: str(n) for n in base_check.nodes()})
-        communities = list(nx_comm.greedy_modularity_communities(base_check_str))
-        
-        # Enforce max nodes constraint if requested via recursive splitting
-        if max_nodes_per_community is not None:
-            final_comms = []
-            queue = communities.copy()
-            while queue:
-                c = queue.pop(0)
-                if len(c) <= max_nodes_per_community:
-                    final_comms.append(c)
-                else:
-                    sub = base_check_str.subgraph(c)
-                    sub_comms = list(nx_comm.greedy_modularity_communities(sub))
-                    if len(sub_comms) == 1:
-                        # Cannot split further by modularity, chunk arbitrarily
-                        nodes = list(sub.nodes())
-                        for i in range(0, len(nodes), max_nodes_per_community):
-                            final_comms.append(set(nodes[i:i+max_nodes_per_community]))
-                    else:
-                        queue.extend(sub_comms)
-            communities = final_comms
-
-        try:
-            mod = round(nx_comm.modularity(base_check_str, communities), 6)
-        except Exception:
-            mod = 0.0
-        return {
-            "history": [], "removed_edges": [],
-            "optimal_communities": communities,
-            "optimal_modularity": mod,
-            "target_communities": communities,
-        }
-
-    # Always work on an undirected, string-node copy
     base = G.to_undirected() if G.is_directed() else G
-    base = _sanitize_weights(base)   # relabels nodes to strings, sanitises weights
-
-    H = base.copy()
-    isolated = list(nx.isolates(H))
-    H.remove_nodes_from(isolated)
-
-    if H.number_of_edges() == 0:
-        comm = [set(base.nodes())]
-        return {**_empty, "optimal_communities": comm, "target_communities": comm}
-
-    # ── Inner helpers ─────────────────────────────────────────────────────────
-
-    def _build_partition(comps):
-        """List-of-sets including isolated singletons."""
-        p = [set(c) for c in comps]
-        for iso in isolated:
-            p.append({iso})
-        return p
-
-    def _modularity(partition):
-        try:
-            return round(nx_comm.modularity(base, partition), 6)
-        except Exception:
-            return 0.0
-
-    def _ebc(comp_nodes):
-        """Exact unweighted Brandes EBC for one component (Gephi-style)."""
-        sub = H.subgraph(comp_nodes).copy()
-        n = len(comp_nodes)
-        if n > 500:
-            return nx.edge_betweenness_centrality(sub, k=min(n, 50), weight=None, normalized=True)
-        return nx.edge_betweenness_centrality(sub, weight=None, normalized=True)
-
-    # ── Bootstrap component EBC cache ────────────────────────────────────────
-    component_ebc: Dict[frozenset, dict] = {}
-    for comp in nx.connected_components(H):
+    H = _sanitize_weights(base)
+    
+    components = [set(c) for c in nx.connected_components(H)]
+    
+    component_ebc = {}
+    for comp in components:
         if len(comp) > 1:
-            component_ebc[frozenset(comp)] = _ebc(comp)
-
-    # ── Baseline modularity ───────────────────────────────────────────────────
-    init_parts = _build_partition(list(nx.connected_components(H)))
-    best_modularity = _modularity(init_parts) if len(init_parts) > 1 else 0.0
-    best_partition  = init_parts
-    target_partition = init_parts
-    reached_target   = False
-
-    history: list       = []
-    removed_edges: list = []
-    iteration           = 0
-    max_removals        = H.number_of_edges()
-
-    # ── Main loop ─────────────────────────────────────────────────────────────
-    while iteration < max_removals:
-
-        # Step 1 — find highest EBC edge globally
-        top_edge = None
-        top_val  = -1.0
-        top_comp = None
-
+            component_ebc[frozenset(comp)] = _compute_ebc(H.subgraph(comp))
+            
+    while H.number_of_edges() > 0:
+        # Stop condition: desired number of communities is reached
+        if num_communities is not None and len(components) >= num_communities:
+            break
+            
+        # Identify the edge with the highest betweenness
+        max_edge = None
+        max_val = -1.0
+        max_comp = None
+        
         for comp, ebc_dict in component_ebc.items():
-            if not ebc_dict:
-                continue
-            e, v = max(ebc_dict.items(), key=lambda x: x[1])
-            if v > top_val:
-                top_val  = v
-                top_edge = e
-                top_comp = comp
-
-        if top_edge is None:
+            for e, val in ebc_dict.items():
+                if val > max_val:
+                    max_val = val
+                    max_edge = e
+                    max_comp = comp
+                    
+        if max_edge is None:
             break
-
-        # Step 2 — remove that single edge
-        H.remove_edge(*top_edge)
-        removed_edges.append(top_edge)
-        iteration += 1
-
-        # Step 3 — recalculate EBC only for the affected component
-        del component_ebc[top_comp]
-        for nc in nx.connected_components(H.subgraph(top_comp)):
+            
+        # Remove the edge with the highest betweenness
+        H.remove_edge(*max_edge)
+        
+        # Find new components for the affected component
+        affected_subgraph = H.subgraph(max_comp)
+        new_comps = [set(c) for c in nx.connected_components(affected_subgraph)]
+        
+        # Update components list
+        components = [c for c in components if c != max_comp] + new_comps
+        
+        # Recalculate betweenness for affected edges (the new components)
+        del component_ebc[frozenset(max_comp)]
+        for nc in new_comps:
             if len(nc) > 1:
-                component_ebc[frozenset(nc)] = _ebc(nc)
-
-        # Step 4 — current state
-        cur_comps = list(nx.connected_components(H))
-        cur_part  = _build_partition(cur_comps)
-        num_comms = len(cur_part)
-        mod_score = _modularity(cur_part)
-
-        history.append({
-            "iteration":       iteration,
-            "removed_edge":    top_edge,
-            "betweenness":     top_val,
-            "num_communities": num_comms,
-            "modularity":      mod_score,
-        })
-
-        # Step 5 — update best partition
-        if mod_score > best_modularity:
-            best_modularity = mod_score
-            best_partition  = cur_part
-
-        # Step 6 — early stop when max community size is <= k
-        if max_nodes_per_community is not None:
-            max_size = max(len(c) for c in cur_part) if cur_part else 0
-            if max_size <= max_nodes_per_community:
-                target_partition = cur_part
-                reached_target   = True
-                break
-
-        # Also stop if all nodes are isolated
-        if num_comms >= H.number_of_nodes() + len(isolated):
-            break
-
-    if not reached_target:
-        target_partition = best_partition
-
-    print(f"[Girvan-Newman] {iteration} edges removed | "
-          f"{len(target_partition)} communities | "
-          f"best Q={best_modularity:.4f}")
-
-    return {
-        "history":             history,
-        "removed_edges":       removed_edges,
-        "optimal_communities": best_partition,
-        "optimal_modularity":  best_modularity,
-        "target_communities":  target_partition,
-    }
+                component_ebc[frozenset(nc)] = _compute_ebc(H.subgraph(nc))
+                
+    return {"target_communities": components}
 
 
 def detect_louvain(G: nx.Graph) -> Dict[str, int]:
     """
     Detect communities using the Louvain algorithm.
     Falls back to greedy modularity if python-louvain is not installed.
-
-    Args:
-        G: A NetworkX graph.
-
-    Returns:
-        Dict mapping node_id (str) -> community_id (int).
     """
     if G is None or G.number_of_nodes() == 0:
         return {}
@@ -259,12 +167,6 @@ def detect_louvain(G: nx.Graph) -> Dict[str, int]:
 def partition_from_list(communities: List[Set]) -> Dict[str, int]:
     """
     Convert a list-of-sets community structure to a node->community_id dict.
-
-    Args:
-        communities: List of sets of node IDs.
-
-    Returns:
-        Dict mapping node_id (str) -> community integer index.
     """
     mapping = {}
     for cid, community in enumerate(communities):
@@ -276,13 +178,6 @@ def partition_from_list(communities: List[Set]) -> Dict[str, int]:
 def compute_modularity(G: nx.Graph, partition: Dict[str, int]) -> float:
     """
     Compute the modularity score for a given partition.
-
-    Args:
-        G: A NetworkX graph.
-        partition: Dict mapping node_id -> community_id.
-
-    Returns:
-        Modularity score (float, typically between -0.5 and 1.0).
     """
     if G is None or G.number_of_nodes() == 0 or not partition:
         return 0.0
@@ -290,13 +185,11 @@ def compute_modularity(G: nx.Graph, partition: Dict[str, int]) -> float:
     base = G.to_undirected() if G.is_directed() else G
     base = _sanitize_weights(base)  # nodes are strings after this
 
-    # Build list-of-sets using string node IDs
     community_ids = set(partition.values())
     communities = [
         {str(n) for n, c in partition.items() if c == cid}
         for cid in community_ids
     ]
-    # Filter out empty sets and ensure all nodes exist in graph
     graph_nodes = set(base.nodes())
     communities = [c & graph_nodes for c in communities]
     communities = [c for c in communities if c]
@@ -312,37 +205,20 @@ def compute_modularity(G: nx.Graph, partition: Dict[str, int]) -> float:
 def compare_algorithms(G: nx.Graph, gn_k: int = 4, algo: str = "both") -> Dict[str, Any]:
     """
     Run both Girvan-Newman and Louvain algorithms and return comparison metrics.
-
-    Args:
-        G: A NetworkX graph.
-        gn_k: Number of communities for Girvan-Newman.
-        algo: Which algorithm to run: 'louvain', 'girvan_newman', or 'both'.
-
-    Returns:
-        Dict with keys 'girvan_newman' and 'louvain', each containing:
-            - num_communities: int
-            - modularity: float
-            - partition: Dict[str, int]
     """
     results = {}
 
     # Girvan-Newman
-    n_edges = G.number_of_edges()
     if algo in ["girvan_newman", "both"]:
-        # Pass k=None to let the algorithm auto-select the best partition by modularity.
-        # If the user set a specific k (gn_k > 0), pass it as an early-stop hint.
-        k_hint = int(gn_k) if gn_k and int(gn_k) > 1 else None
-        gn_result = detect_girvan_newman(G, max_nodes_per_community=k_hint)
-        # We use target_communities to honor the user's max nodes constraint.
+        target_k = int(gn_k) if gn_k and int(gn_k) > 0 else None
+        gn_result = detect_girvan_newman(G, num_communities=target_k)
         gn_communities = gn_result["target_communities"]
         gn_partition = partition_from_list(gn_communities)
-        # Recompute modularity for the target partition
         gn_modularity = compute_modularity(G, gn_partition)
         results["girvan_newman"] = {
             "num_communities": len(gn_communities),
             "modularity": gn_modularity,
             "partition": gn_partition,
-            # NOTE: history excluded to keep JSON small
         }
     else:
         results["girvan_newman"] = {
