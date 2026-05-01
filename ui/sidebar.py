@@ -383,14 +383,14 @@ def build_community_card() -> html.Div:
 
 
 
-def build_clustering_card() -> html.Div:
-    """Build the clustering coefficient panel."""
+def build_node_communities_card() -> html.Div:
+    """Build a panel to display the community of each node."""
     return html.Div(
         style=STYLE_CARD,
         children=[
-            html.P("Clustering Coefficient", style=STYLE_SECTION_TITLE),
+            html.P("Node Communities", style=STYLE_SECTION_TITLE),
             html.Div(
-                id="clustering-results",
+                id="node-communities-results",
                 style={
                     "overflowY": "auto",
                     "maxHeight": "180px",
@@ -399,7 +399,7 @@ def build_clustering_card() -> html.Div:
                 },
                 children=[
                     html.Span(
-                        "Build a graph to see clustering coefficients.",
+                        "Run community detection (Both) to see node assignments.",
                         style={"color": COLORS["text_muted"], "fontSize": "12px"},
                     )
                 ],
@@ -421,6 +421,6 @@ def build_sidebar() -> html.Div:
             build_centrality_filter_card(),
             build_link_analysis_card(),
             build_community_card(),
-            build_clustering_card(),
+            build_node_communities_card(),
         ],
     )

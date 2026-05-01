@@ -1038,30 +1038,40 @@ def update_link_analysis_panel(n_pr, n_bt, n_ev, n_cl, centralities_json):
 
 
 
-# 19. Clustering results panel ────────────────────────────────────────────
+# 19. Node Communities results panel ────────────────────────────────────────────
 @app.callback(
-    Output("clustering-results", "children"),
-    Input("store-centralities", "data"),
+    Output("node-communities-results", "children"),
+    Input("store-comparison", "data"),
     prevent_initial_call=False,
 )
-def update_clustering_panel(centralities_json):
+def update_node_communities_panel(comparison_json):
     from ui.styles import COLORS
 
-    if not centralities_json:
+    if not comparison_json:
         return html.Span(
-            "Build a graph to see clustering coefficients.",
+            "Run community detection (Both) to see node assignments.",
             style={"color": COLORS["text_muted"], "fontSize": "12px"},
         )
 
-    centralities = json.loads(centralities_json)
-    scores = {
-        nid: data.get("clustering", 0.0)
-        for nid, data in centralities.items()
-        if "clustering" in data
-    }
+    comparison = json.loads(comparison_json)
+    gn_part = comparison.get("girvan_newman", {}).get("partition", {})
+    louv_part = comparison.get("louvain", {}).get("partition", {})
+
+    if not gn_part and not louv_part:
+        return html.Span(
+            "No community data available.",
+            style={"color": COLORS["text_muted"], "fontSize": "12px"},
+        )
+
+    # Gather all node IDs from both partitions
+    all_nodes = set(gn_part.keys()).union(set(louv_part.keys()))
     
-    # Sort by clustering coefficient descending (all nodes)
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    # Sort nodes for display
+    def natural_sort_key(s):
+        import re
+        return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s))]
+    
+    sorted_nodes = sorted(list(all_nodes), key=natural_sort_key)
 
     rows = [
         html.Div(
@@ -1072,16 +1082,20 @@ def update_clustering_panel(centralities_json):
             },
             children=[
                 html.Span(
-                    f"#{rank}  {nid}",
-                    style={"color": COLORS["text_secondary"], "fontSize": "12px", "fontWeight": "600"},
+                    str(nid),
+                    style={"color": COLORS["text_primary"], "fontSize": "12px", "fontWeight": "600", "flex": "1"},
                 ),
                 html.Span(
-                    f"{score:.4f}",
-                    style={"color": COLORS["accent_green"], "fontSize": "12px", "fontWeight": "700"},
+                    str(gn_part.get(str(nid), "—")),
+                    style={"color": COLORS["accent_blue"], "fontSize": "12px", "fontWeight": "700", "flex": "1", "textAlign": "center"},
+                ),
+                html.Span(
+                    str(louv_part.get(str(nid), "—")),
+                    style={"color": COLORS["accent_purple"], "fontSize": "12px", "fontWeight": "700", "flex": "1", "textAlign": "right"},
                 ),
             ],
         )
-        for rank, (nid, score) in enumerate(ranked, 1)
+        for nid in sorted_nodes
     ]
 
     header = html.Div(
@@ -1091,8 +1105,9 @@ def update_clustering_panel(centralities_json):
             "marginBottom": "4px",
         },
         children=[
-            html.Span("Node", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
-            html.Span("Coefficient", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
+            html.Span("Node", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase", "flex": "1"}),
+            html.Span("GN Comm", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase", "flex": "1", "textAlign": "center"}),
+            html.Span("Louv Comm", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase", "flex": "1", "textAlign": "right"}),
         ],
     )
     return html.Div([header, *rows])
