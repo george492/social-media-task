@@ -676,9 +676,27 @@ def update_community_panels(comparison_json, community_json, graph_json, nodes_j
                 except Exception as e:
                     print(f"[eval] true_labels error: {e}")
 
-            evaluation = evaluate_partition(G, partition, true_labels=true_labels)
-            print(f"[eval] results: {evaluation}")
-            eval_widget = build_evaluation_table(evaluation)
+            if comparison_json:
+                comparison = json.loads(comparison_json)
+                gn_part = comparison.get("girvan_newman", {}).get("partition", {})
+                louv_part = comparison.get("louvain", {}).get("partition", {})
+                gn_num = comparison.get("girvan_newman", {}).get("num_communities", 0)
+                louv_num = comparison.get("louvain", {}).get("num_communities", 0)
+
+                if gn_part and louv_part and gn_num > 0 and louv_num > 0:
+                    gn_eval = evaluate_partition(G, gn_part, true_labels=true_labels)
+                    louv_eval = evaluate_partition(G, louv_part, true_labels=true_labels)
+                    print(f"[eval] results GN: {gn_eval}")
+                    print(f"[eval] results Louvain: {louv_eval}")
+                    eval_widget = build_evaluation_table({"Girvan-Newman": gn_eval, "Louvain": louv_eval})
+                else:
+                    evaluation = evaluate_partition(G, partition, true_labels=true_labels)
+                    print(f"[eval] results: {evaluation}")
+                    eval_widget = build_evaluation_table(evaluation)
+            else:
+                evaluation = evaluate_partition(G, partition, true_labels=true_labels)
+                print(f"[eval] results: {evaluation}")
+                eval_widget = build_evaluation_table(evaluation)
         except Exception as e:
             import traceback
             print(f"[eval callback] {e}")

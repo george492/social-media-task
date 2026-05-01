@@ -136,7 +136,7 @@ def build_community_comparison(comparison: Optional[Dict[str, Any]]) -> html.Div
     )
 
 
-def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
+def build_evaluation_table(evaluations: Optional[Dict[str, Any]]) -> html.Div:
     """Build the clustering evaluation metrics table."""
     internal_metrics = {
         "modularity": ("Modularity Q", COLORS["accent_blue"], "Internal quality of communities"),
@@ -149,19 +149,26 @@ def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
         "nmi": ("NMI (vs Group)", COLORS["accent_red"], "Normalized Mutual Information with ground truth"),
     }
 
-    eval_dict = evaluation or {}
+    if not evaluations:
+        evaluations = {"Score": {}}
+        algos = ["Score"]
+    elif "modularity" in evaluations:
+        evaluations = {"Score": evaluations}
+        algos = ["Score"]
+    else:
+        algos = list(evaluations.keys())
 
     rows = []
     for key, (label, color, desc) in internal_metrics.items():
-        val = eval_dict.get(key)
-        val_str = f"{val:.4f}" if val is not None else "—"
-        rows.append(html.Tr([
-            html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"}),
-            html.Td(
+        row_cells = [html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"})]
+        for algo in algos:
+            val = evaluations[algo].get(key)
+            val_str = f"{val:.4f}" if val is not None else "—"
+            row_cells.append(html.Td(
                 val_str,
                 style={"color": color, "fontWeight": "700", "fontSize": "13px", "padding": "5px 8px", "textAlign": "right"},
-            ),
-        ]))
+            ))
+        rows.append(html.Tr(row_cells))
 
     rows.append(html.Tr([
         html.Td(
@@ -169,29 +176,31 @@ def build_evaluation_table(evaluation: Optional[Dict[str, float]]) -> html.Div:
                 html.Hr(style={"borderColor": COLORS["border"], "marginTop": "6px", "marginBottom": "6px"}),
                 html.Span("Metrics (External)", style={"color": COLORS["text_muted"], "fontSize": "11px", "fontWeight": "600", "textTransform": "uppercase"}),
             ]),
-            colSpan=2,
+            colSpan=len(algos) + 1,
             style={"padding": "0 8px"}
         )
     ]))
     
-    nmi_val = eval_dict.get("nmi")
-    nmi_str = f"{nmi_val:.4f}" if nmi_val is not None else "—"
     label, color, desc = external_metrics["nmi"]
-    rows.append(html.Tr([
-        html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"}),
-        html.Td(
+    nmi_row_cells = [html.Td(label, style={"color": COLORS["text_secondary"], "fontSize": "12px", "padding": "5px 8px"})]
+    for algo in algos:
+        nmi_val = evaluations[algo].get("nmi")
+        nmi_str = f"{nmi_val:.4f}" if nmi_val is not None else "—"
+        nmi_row_cells.append(html.Td(
             nmi_str,
             style={"color": color, "fontWeight": "700", "fontSize": "13px", "padding": "5px 8px", "textAlign": "right"},
-        ),
-    ]))
+        ))
+    rows.append(html.Tr(nmi_row_cells))
+
+    th_style = {"color": COLORS["text_muted"], "fontSize": "11px", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}
+    header_cells = [html.Th("Metric", style={**th_style, "textAlign": "left"})]
+    for algo in algos:
+        header_cells.append(html.Th(algo, style={**th_style, "textAlign": "right"}))
 
     return html.Table(
         style={"width": "100%", "borderCollapse": "collapse"},
         children=[
-            html.Thead(html.Tr([
-                html.Th("Metric", style={"color": COLORS["text_muted"], "fontSize": "11px", "textAlign": "left", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}),
-                html.Th("Score", style={"color": COLORS["text_muted"], "fontSize": "11px", "textAlign": "right", "padding": "4px 8px", "borderBottom": f"1px solid {COLORS['border']}"}),
-            ])),
+            html.Thead(html.Tr(header_cells)),
             html.Tbody(rows),
         ],
     )
