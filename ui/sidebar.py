@@ -67,11 +67,6 @@ def build_upload_card() -> html.Div:
             html.Div(id="edges-upload-status", style={"fontSize": "11px", "color": COLORS["accent_green"], "marginBottom": "12px"}),
 
             html.Button(
-                "Load Sample Data",
-                id="btn-load-sample",
-                style={**STYLE_BUTTON, "backgroundColor": COLORS["accent_green"], "marginBottom": "6px"},
-            ),
-            html.Button(
                 "Build Graph",
                 id="btn-build-graph",
                 style=STYLE_BUTTON,

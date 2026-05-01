@@ -149,20 +149,12 @@ def _get_group_colors(G: nx.Graph) -> dict:
     Output("store-nodes-raw", "data"),
     Output("nodes-upload-status", "children"),
     Input("upload-nodes", "contents"),
-    Input("btn-load-sample", "n_clicks"),
     State("upload-nodes", "filename"),
     prevent_initial_call=True,
 )
-def store_nodes(contents, n_clicks, filename):
+def store_nodes(contents, filename):
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
-
-    if "btn-load-sample" in trigger:
-        try:
-            df = pd.read_csv("data/sample_nodes.csv")
-            return df.to_json(), f"Sample nodes loaded ({len(df)} rows)"
-        except Exception as e:
-            return no_update, f"Error: {e}"
 
     if contents:
         df = parse_upload(contents)
@@ -179,20 +171,12 @@ def store_nodes(contents, n_clicks, filename):
     Output("store-edges-raw", "data"),
     Output("edges-upload-status", "children"),
     Input("upload-edges", "contents"),
-    Input("btn-load-sample", "n_clicks"),
     State("upload-edges", "filename"),
     prevent_initial_call=True,
 )
-def store_edges(contents, n_clicks, filename):
+def store_edges(contents, filename):
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
-
-    if "btn-load-sample" in trigger:
-        try:
-            df = pd.read_csv("data/sample_edges.csv")
-            return df.to_json(), f"Sample edges loaded ({len(df)} rows)"
-        except Exception as e:
-            return no_update, f"Error: {e}"
 
     if contents:
         df = parse_upload(contents)
@@ -212,29 +196,20 @@ def store_edges(contents, n_clicks, filename):
     Output("store-degree-dist", "data"),
     Output("header-status", "children"),
     Input("btn-build-graph", "n_clicks"),
-    Input("btn-load-sample", "n_clicks"),
     State("store-nodes-raw", "data"),
     State("store-edges-raw", "data"),
     State("radio-graph-type", "value"),
     prevent_initial_call=True,
 )
-def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
+def build_graph(n_build, nodes_json, edges_json, graph_type):
     if not nodes_json and not edges_json:
         return no_update, no_update, no_update, no_update, "No data loaded"
 
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
 
-    # Give sample data a moment to be stored first
-    if "btn-load-sample" in trigger:
-        try:
-            nodes_df = pd.read_csv("data/sample_nodes.csv")
-            edges_df = pd.read_csv("data/sample_edges.csv")
-        except Exception as e:
-            return no_update, no_update, no_update, no_update, f"Sample load error: {e}"
-    else:
-        nodes_df = pd.read_json(nodes_json, dtype=str) if nodes_json else None
-        edges_df = pd.read_json(edges_json) if edges_json else None
+    nodes_df = pd.read_json(nodes_json, dtype=str) if nodes_json else None
+    edges_df = pd.read_json(edges_json) if edges_json else None
 
     directed = (graph_type == "directed")
     
@@ -284,8 +259,6 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
     Output("store-community", "data"),
     Output("store-comparison", "data"),
     Input("btn-run-community", "n_clicks"),
-    Input("btn-build-graph", "n_clicks"),
-    Input("btn-load-sample", "n_clicks"),
     State("store-nodes-raw", "data"),
     State("store-edges-raw", "data"),
     State("radio-graph-type", "value"),
@@ -293,22 +266,17 @@ def build_graph(n_build, n_sample, nodes_json, edges_json, graph_type):
     State("slider-gn-k", "value"),
     prevent_initial_call=True,
 )
-def run_community(n_comm, n_build, n_sample, nodes_json, edges_json, graph_type, algo, gn_k):
+def run_community(n_comm, nodes_json, edges_json, graph_type, algo, gn_k):
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
 
     try:
-        if "btn-load-sample" in trigger:
-            nodes_df = pd.read_csv("data/sample_nodes.csv")
-            edges_df = pd.read_csv("data/sample_edges.csv")
-            directed = False
-        else:
-            if not nodes_json and not edges_json:
-                return no_update, no_update
-            from io import StringIO
-            nodes_df = pd.read_json(StringIO(nodes_json), dtype=str) if nodes_json else None
-            edges_df = pd.read_json(StringIO(edges_json)) if edges_json else None
-            directed = (graph_type == "directed")
+        if not nodes_json and not edges_json:
+            return no_update, no_update
+        from io import StringIO
+        nodes_df = pd.read_json(StringIO(nodes_json), dtype=str) if nodes_json else None
+        edges_df = pd.read_json(StringIO(edges_json)) if edges_json else None
+        directed = (graph_type == "directed")
 
         G = load_graph_from_dataframes(nodes_df, edges_df, directed=directed)
         comparison = compare_algorithms(G, gn_k=int(gn_k or 4), algo=algo)
