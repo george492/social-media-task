@@ -135,6 +135,13 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
         # Fall back for degenerate graphs
         pagerank = {n: 1.0 / G.number_of_nodes() for n in G.nodes()}
 
+    try:
+        # Use undirected for eigenvector if directed (avoids convergence errors)
+        G_undir = G.to_undirected() if G.is_directed() else G
+        eigenvector = nx.eigenvector_centrality(G_undir, max_iter=1000, tol=1e-6)
+    except Exception:
+        eigenvector = {n: 0.0 for n in G.nodes()}
+
     result = {}
     for node in G.nodes():
         result[str(node)] = {
@@ -142,6 +149,7 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
             "betweenness": round(betweenness_c.get(node, 0.0), 6),
             "closeness": round(closeness_c.get(node, 0.0), 6),
             "pagerank": round(pagerank.get(node, 0.0), 6),
+            "eigenvector": round(eigenvector.get(node, 0.0), 6),
         }
     return result
 

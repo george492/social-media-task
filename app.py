@@ -853,6 +853,118 @@ def toggle_gn_slider(algo):
 
 
 
+# 18. Link Analysis results panel ────────────────────────────────────────────
+@app.callback(
+    Output("link-analysis-results", "children"),
+    Output("btn-la-pagerank",    "style"),
+    Output("btn-la-betweenness", "style"),
+    Output("btn-la-eigenvector", "style"),
+    Output("btn-la-closeness",   "style"),
+    Input("btn-la-pagerank",    "n_clicks"),
+    Input("btn-la-betweenness", "n_clicks"),
+    Input("btn-la-eigenvector", "n_clicks"),
+    Input("btn-la-closeness",   "n_clicks"),
+    Input("store-centralities", "data"),
+    prevent_initial_call=False,
+)
+def update_link_analysis_panel(n_pr, n_bt, n_ev, n_cl, centralities_json):
+    from ui.styles import COLORS
+
+    _base = {
+        "padding": "5px 14px", "fontSize": "12px", "fontWeight": "600",
+        "cursor": "pointer", "whiteSpace": "nowrap", "borderRadius": "5px",
+        "border": f"1px solid {COLORS['border']}",
+        "backgroundColor": COLORS["bg_dark"], "color": COLORS["text_muted"],
+        "letterSpacing": "0.04em", "transition": "all 0.2s",
+    }
+    _active_pr  = {**_base, "color": COLORS["accent_blue"],   "borderColor": COLORS["accent_blue"]}
+    _active_bt  = {**_base, "color": COLORS["accent_orange"], "borderColor": COLORS["accent_orange"]}
+    _active_ev  = {**_base, "color": COLORS["accent_green"],  "borderColor": COLORS["accent_green"]}
+    _active_cl  = {**_base, "color": COLORS["accent_purple"], "borderColor": COLORS["accent_purple"]}
+
+    metric_map = {
+        "btn-la-pagerank":    ("pagerank",    _active_pr,  COLORS["accent_blue"]),
+        "btn-la-betweenness": ("betweenness", _active_bt,  COLORS["accent_orange"]),
+        "btn-la-eigenvector": ("eigenvector", _active_ev,  COLORS["accent_green"]),
+        "btn-la-closeness":   ("closeness",   _active_cl,  COLORS["accent_purple"]),
+    }
+
+    ctx = callback_context
+    if ctx.triggered:
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    else:
+        triggered_id = "btn-la-pagerank"
+
+    active = triggered_id if triggered_id in metric_map else "btn-la-pagerank"
+
+    # When triggered by data update, keep whichever tab was last clicked
+    if triggered_id == "store-centralities":
+        counts = {
+            "btn-la-pagerank":    n_pr or 0,
+            "btn-la-betweenness": n_bt or 0,
+            "btn-la-eigenvector": n_ev or 0,
+            "btn-la-closeness":   n_cl or 0,
+        }
+        active = max(counts, key=counts.get)
+
+    metric_key, active_style, value_color = metric_map[active]
+    styles = {k: (active_style if k == active else _base) for k in metric_map}
+
+    def _out():
+        return styles["btn-la-pagerank"], styles["btn-la-betweenness"], styles["btn-la-eigenvector"], styles["btn-la-closeness"]
+
+    if not centralities_json:
+        placeholder = html.Span(
+            "Build a graph to see link analysis results.",
+            style={"color": COLORS["text_muted"], "fontSize": "12px"},
+        )
+        return (placeholder,) + _out()
+
+    centralities = json.loads(centralities_json)
+    scores = {
+        nid: data.get(metric_key, 0.0)
+        for nid, data in centralities.items()
+        if metric_key in data
+    }
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:20]
+
+    rows = [
+        html.Div(
+            style={
+                "display": "flex", "justifyContent": "space-between",
+                "alignItems": "center", "padding": "4px 6px",
+                "borderBottom": f"1px solid {COLORS['border']}22",
+            },
+            children=[
+                html.Span(
+                    f"#{rank}  {nid}",
+                    style={"color": COLORS["text_secondary"], "fontSize": "12px", "fontWeight": "600"},
+                ),
+                html.Span(
+                    f"{score:.5f}",
+                    style={"color": value_color, "fontSize": "12px", "fontWeight": "700"},
+                ),
+            ],
+        )
+        for rank, (nid, score) in enumerate(ranked, 1)
+    ]
+
+    header = html.Div(
+        style={
+            "display": "flex", "justifyContent": "space-between",
+            "padding": "2px 6px 6px", "borderBottom": f"1px solid {COLORS['border']}",
+            "marginBottom": "4px",
+        },
+        children=[
+            html.Span("Node", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
+            html.Span("Score", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
+        ],
+    )
+    content = html.Div([header, *rows])
+    return (content,) + _out()
+
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

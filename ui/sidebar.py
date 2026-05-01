@@ -271,6 +271,64 @@ def build_centrality_filter_card() -> html.Div:
     )
 
 
+def build_link_analysis_card() -> html.Div:
+    """Build the link analysis results panel with horizontally scrollable metric tabs."""
+    tab_style = {
+        "padding": "5px 14px",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "cursor": "pointer",
+        "whiteSpace": "nowrap",
+        "borderRadius": "5px",
+        "border": f"1px solid {COLORS['border']}",
+        "backgroundColor": COLORS["bg_dark"],
+        "color": COLORS["text_muted"],
+        "letterSpacing": "0.04em",
+        "transition": "all 0.2s",
+    }
+    return html.Div(
+        style=STYLE_CARD,
+        children=[
+            html.P("Link Analysis", style=STYLE_SECTION_TITLE),
+
+            # Horizontally scrollable tab strip
+            html.Div(
+                style={
+                    "display": "flex",
+                    "gap": "6px",
+                    "overflowX": "auto",
+                    "paddingBottom": "8px",
+                    "marginBottom": "10px",
+                    "scrollbarWidth": "thin",
+                },
+                children=[
+                    html.Button("PageRank",           id="btn-la-pagerank",    n_clicks=1, style={**tab_style, "color": COLORS["accent_blue"],   "borderColor": COLORS["accent_blue"]}),
+                    html.Button("Betweenness",         id="btn-la-betweenness", n_clicks=0, style=tab_style),
+                    html.Button("Eigenvector",         id="btn-la-eigenvector", n_clicks=0, style=tab_style),
+                    html.Button("Closeness",           id="btn-la-closeness",   n_clicks=0, style=tab_style),
+                ],
+            ),
+
+            # Results container — populated by callback
+            html.Div(
+                id="link-analysis-results",
+                style={
+                    "overflowY": "auto",
+                    "maxHeight": "180px",
+                    "fontSize": "12px",
+                    "color": COLORS["text_secondary"],
+                },
+                children=[
+                    html.Span(
+                        "Build a graph to see link analysis results.",
+                        style={"color": COLORS["text_muted"], "fontSize": "12px"},
+                    )
+                ],
+            ),
+        ],
+    )
+
+
 def build_community_card() -> html.Div:
     """Build community detection controls."""
     return html.Div(
@@ -336,6 +394,7 @@ def build_sidebar() -> html.Div:
             build_graph_controls_card(),
             build_coloring_card(),
             build_centrality_filter_card(),
+            build_link_analysis_card(),
             build_community_card(),
         ],
     )
