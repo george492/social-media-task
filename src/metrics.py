@@ -142,6 +142,11 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
     except Exception:
         eigenvector = {n: 0.0 for n in G.nodes()}
 
+    try:
+        clustering_c = nx.clustering(G.to_undirected() if G.is_directed() else G)
+    except Exception:
+        clustering_c = {n: 0.0 for n in G.nodes()}
+
     result = {}
     for node in G.nodes():
         result[str(node)] = {
@@ -150,6 +155,7 @@ def compute_centralities(G: nx.Graph) -> Dict[str, Dict[str, float]]:
             "closeness": round(closeness_c.get(node, 0.0), 6),
             "pagerank": round(pagerank.get(node, 0.0), 6),
             "eigenvector": round(eigenvector.get(node, 0.0), 6),
+            "clustering": round(clustering_c.get(node, 0.0), 6),
         }
     return result
 

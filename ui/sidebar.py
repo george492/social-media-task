@@ -383,6 +383,31 @@ def build_community_card() -> html.Div:
 
 
 
+def build_clustering_card() -> html.Div:
+    """Build the clustering coefficient panel."""
+    return html.Div(
+        style=STYLE_CARD,
+        children=[
+            html.P("Clustering Coefficient", style=STYLE_SECTION_TITLE),
+            html.Div(
+                id="clustering-results",
+                style={
+                    "overflowY": "auto",
+                    "maxHeight": "180px",
+                    "fontSize": "12px",
+                    "color": COLORS["text_secondary"],
+                },
+                children=[
+                    html.Span(
+                        "Build a graph to see clustering coefficients.",
+                        style={"color": COLORS["text_muted"], "fontSize": "12px"},
+                    )
+                ],
+            ),
+        ],
+    )
+
+
 def build_sidebar() -> html.Div:
     """Assemble the complete sidebar from all control cards."""
     from ui.styles import STYLE_SIDEBAR
@@ -396,5 +421,6 @@ def build_sidebar() -> html.Div:
             build_centrality_filter_card(),
             build_link_analysis_card(),
             build_community_card(),
+            build_clustering_card(),
         ],
     )

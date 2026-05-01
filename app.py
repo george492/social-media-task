@@ -1038,6 +1038,67 @@ def update_link_analysis_panel(n_pr, n_bt, n_ev, n_cl, centralities_json):
 
 
 
+# 19. Clustering results panel ────────────────────────────────────────────
+@app.callback(
+    Output("clustering-results", "children"),
+    Input("store-centralities", "data"),
+    prevent_initial_call=False,
+)
+def update_clustering_panel(centralities_json):
+    from ui.styles import COLORS
+
+    if not centralities_json:
+        return html.Span(
+            "Build a graph to see clustering coefficients.",
+            style={"color": COLORS["text_muted"], "fontSize": "12px"},
+        )
+
+    centralities = json.loads(centralities_json)
+    scores = {
+        nid: data.get("clustering", 0.0)
+        for nid, data in centralities.items()
+        if "clustering" in data
+    }
+    
+    # Sort by clustering coefficient descending (all nodes)
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    rows = [
+        html.Div(
+            style={
+                "display": "flex", "justifyContent": "space-between",
+                "alignItems": "center", "padding": "4px 6px",
+                "borderBottom": f"1px solid {COLORS['border']}22",
+            },
+            children=[
+                html.Span(
+                    f"#{rank}  {nid}",
+                    style={"color": COLORS["text_secondary"], "fontSize": "12px", "fontWeight": "600"},
+                ),
+                html.Span(
+                    f"{score:.4f}",
+                    style={"color": COLORS["accent_green"], "fontSize": "12px", "fontWeight": "700"},
+                ),
+            ],
+        )
+        for rank, (nid, score) in enumerate(ranked, 1)
+    ]
+
+    header = html.Div(
+        style={
+            "display": "flex", "justifyContent": "space-between",
+            "padding": "2px 6px 6px", "borderBottom": f"1px solid {COLORS['border']}",
+            "marginBottom": "4px",
+        },
+        children=[
+            html.Span("Node", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
+            html.Span("Coefficient", style={"color": COLORS["text_muted"], "fontSize": "10px", "fontWeight": "700", "textTransform": "uppercase"}),
+        ],
+    )
+    return html.Div([header, *rows])
+
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
