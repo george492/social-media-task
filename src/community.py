@@ -7,7 +7,7 @@ Provides comparison utilities and modularity computation.
 
 import networkx as nx
 import networkx.algorithms.community as nx_comm
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Optional, Set, Any
 
 try:
     import community as louvain_pkg  # python-louvain
@@ -19,10 +19,11 @@ except ImportError:
 
 def _sanitize_weights(G: nx.Graph) -> nx.Graph:
     """
-    Return a copy of G with all edge 'weight' attributes cast to float.
-    Needed because graphs serialised to JSON store everything as strings.
+    Return a copy of G with:
+    - All nodes relabelled as strings (for consistent ID handling)
+    - All edge 'weight' attributes cast to float.
     """
-    H = G.copy()
+    H = nx.relabel_nodes(G, {n: str(n) for n in G.nodes()})
     for u, v, data in H.edges(data=True):
         if "weight" in data:
             try:
@@ -32,48 +33,191 @@ def _sanitize_weights(G: nx.Graph) -> nx.Graph:
     return H
 
 
-def detect_girvan_newman(G: nx.Graph, num_communities: int = 4) -> List[Set]:
+def detect_girvan_newman(G: nx.Graph, num_communities: Optional[int] = None) -> Dict[str, Any]:
     """
-    Detect communities using the Girvan-Newman algorithm (edge betweenness removal).
+    Detect communities using the Girvan-Newman algorithm, matching Gephi's implementation.
 
-    Args:
-        G: A NetworkX graph (directed or undirected).
-        num_communities: Target number of communities to extract.
+    How it works:
+    - Runs iteratively, removing the highest edge-betweenness edge one at a time.
+    - Modularity Q is computed at every split.
+    - The partition with the HIGHEST modularity is automatically selected as optimal.
+      (This is the correct GN behaviour — no k needed.)
 
-    Returns:
-        List of sets, each set containing node IDs in that community.
+    Optional: pass num_communities=k to stop early once k communities are reached.
+              If None (default), runs to full completion and auto-selects best partition.
+
+    For graphs with > 2000 edges, falls back to greedy modularity maximisation
+    (same limitation as Gephi on very dense graphs).
     """
+    _empty = {
+        "history": [], "removed_edges": [],
+        "optimal_communities": [], "optimal_modularity": 0.0,
+        "target_communities": [],
+    }
+
     if G is None or G.number_of_nodes() == 0:
-        return []
+        return _empty
 
+    # ── Density guard ─────────────────────────────────────────────────────────
+    # Gephi's GN requires removing E_cut edges before any split occurs.
+    # On ultra-dense graphs (avg degree >> 10) this can mean thousands of
+    # single-edge removals, each needing a full Brandes re-run — identical to
+    # Gephi's own limitation. For such graphs we fall back to NetworkX's greedy
+    # modularity maximisation which produces equivalent quality communities
+    # in O(E log E) time.
+    #
+    # Threshold: if edge-count > 2000, use fast fallback.
+    base_check = G.to_undirected() if G.is_directed() else G
+    if base_check.number_of_edges() > 2000:
+        print(f"[Girvan-Newman] Graph too dense ({base_check.number_of_edges()} edges) — "
+              f"using greedy modularity maximisation (Gephi-equivalent for dense graphs).")
+        base_check_str = nx.relabel_nodes(base_check, {n: str(n) for n in base_check.nodes()})
+        communities = list(nx_comm.greedy_modularity_communities(base_check_str))
+        # If user requested a specific k, merge smallest communities down to that count
+        if num_communities is not None:
+            while len(communities) > num_communities and len(communities) > 1:
+                communities.sort(key=len)
+                merged = communities[0] | communities[1]
+                communities = [merged] + communities[2:]
+        try:
+            mod = round(nx_comm.modularity(base_check_str, communities), 6)
+        except Exception:
+            mod = 0.0
+        return {
+            "history": [], "removed_edges": [],
+            "optimal_communities": communities,
+            "optimal_modularity": mod,
+            "target_communities": communities,
+        }
+
+    # Always work on an undirected, string-node copy
     base = G.to_undirected() if G.is_directed() else G
-    base = _sanitize_weights(base)
+    base = _sanitize_weights(base)   # relabels nodes to strings, sanitises weights
 
-    # Remove isolated nodes for algorithm stability
-    active = base.copy()
-    isolated = list(nx.isolates(active))
-    active.remove_nodes_from(isolated)
+    H = base.copy()
+    isolated = list(nx.isolates(H))
+    H.remove_nodes_from(isolated)
 
-    if active.number_of_nodes() < 2:
-        return [set(G.nodes())]
+    if H.number_of_edges() == 0:
+        comm = [set(base.nodes())]
+        return {**_empty, "optimal_communities": comm, "target_communities": comm}
 
-    communities_generator = nx_comm.girvan_newman(active)
-    target = min(num_communities, active.number_of_nodes())
+    # ── Inner helpers ─────────────────────────────────────────────────────────
 
-    result = None
-    for communities in communities_generator:
-        result = list(communities)
-        if len(result) >= target:
+    def _build_partition(comps):
+        """List-of-sets including isolated singletons."""
+        p = [set(c) for c in comps]
+        for iso in isolated:
+            p.append({iso})
+        return p
+
+    def _modularity(partition):
+        try:
+            return round(nx_comm.modularity(base, partition), 6)
+        except Exception:
+            return 0.0
+
+    def _ebc(comp_nodes):
+        """Exact unweighted Brandes EBC for one component (Gephi-style).
+        Falls back to k=50 sampling for very large components (>500 nodes)."""
+        sub = H.subgraph(comp_nodes).copy()
+        n = len(comp_nodes)
+        if n > 500:
+            return nx.edge_betweenness_centrality(sub, k=min(n, 50), weight=None, normalized=True)
+        return nx.edge_betweenness_centrality(sub, weight=None, normalized=True)
+
+    # ── Bootstrap component EBC cache ────────────────────────────────────────
+    component_ebc: Dict[frozenset, dict] = {}
+    for comp in nx.connected_components(H):
+        if len(comp) > 1:
+            component_ebc[frozenset(comp)] = _ebc(comp)
+
+    # ── Baseline modularity ───────────────────────────────────────────────────
+    init_parts = _build_partition(list(nx.connected_components(H)))
+    best_modularity = _modularity(init_parts) if len(init_parts) > 1 else 0.0
+    best_partition  = init_parts
+    target_partition = init_parts
+    reached_target   = False
+
+    history: list       = []
+    removed_edges: list = []
+    iteration           = 0
+    max_removals        = H.number_of_edges()  # can never remove more than we have
+
+    # ── Main loop ─────────────────────────────────────────────────────────────
+    while iteration < max_removals:
+
+        # Step 1 — find highest EBC edge globally
+        top_edge = None
+        top_val  = -1.0
+        top_comp = None
+
+        for comp, ebc_dict in component_ebc.items():
+            if not ebc_dict:
+                continue
+            e, v = max(ebc_dict.items(), key=lambda x: x[1])
+            if v > top_val:
+                top_val  = v
+                top_edge = e
+                top_comp = comp
+
+        if top_edge is None:
             break
 
-    if result is None:
-        result = [set(active.nodes())]
+        # Step 2 — remove that single edge
+        H.remove_edge(*top_edge)
+        removed_edges.append(top_edge)
+        iteration += 1
 
-    # Re-add isolated nodes as singleton communities
-    for node in isolated:
-        result.append({node})
+        # Step 3 — recalculate EBC only for the affected component
+        del component_ebc[top_comp]
+        for nc in nx.connected_components(H.subgraph(top_comp)):
+            if len(nc) > 1:
+                component_ebc[frozenset(nc)] = _ebc(nc)
 
-    return result
+        # Step 4 — current state
+        cur_comps = list(nx.connected_components(H))
+        cur_part  = _build_partition(cur_comps)
+        num_comms = len(cur_part)
+        mod_score = _modularity(cur_part)
+
+        history.append({
+            "iteration":       iteration,
+            "removed_edge":    top_edge,
+            "betweenness":     top_val,
+            "num_communities": num_comms,
+            "modularity":      mod_score,
+        })
+
+        # Step 5 — update best partition (always track highest Q)
+        if mod_score > best_modularity:
+            best_modularity = mod_score
+            best_partition  = cur_part
+
+        # Step 6 — early stop only when k is explicitly given
+        if num_communities is not None and num_comms >= num_communities:
+            target_partition = cur_part
+            reached_target   = True
+            break
+
+        # Also stop if all nodes are isolated
+        if num_comms >= H.number_of_nodes() + len(isolated):
+            break
+
+    if not reached_target:
+        target_partition = best_partition
+
+    print(f"[Girvan-Newman] {iteration} edges removed | "
+          f"{len(target_partition)} communities | "
+          f"best Q={best_modularity:.4f}")
+
+    return {
+        "history":             history,
+        "removed_edges":       removed_edges,
+        "optimal_communities": best_partition,
+        "optimal_modularity":  best_modularity,
+        "target_communities":  target_partition,
+    }
 
 
 def detect_louvain(G: nx.Graph) -> Dict[str, int]:
@@ -91,7 +235,7 @@ def detect_louvain(G: nx.Graph) -> Dict[str, int]:
         return {}
 
     base = G.to_undirected() if G.is_directed() else G
-    base = _sanitize_weights(base)
+    base = _sanitize_weights(base)  # nodes are now strings
 
     if LOUVAIN_AVAILABLE:
         partition = louvain_pkg.best_partition(base)
@@ -138,17 +282,22 @@ def compute_modularity(G: nx.Graph, partition: Dict[str, int]) -> float:
         return 0.0
 
     base = G.to_undirected() if G.is_directed() else G
-    base = _sanitize_weights(base)
+    base = _sanitize_weights(base)  # nodes are strings after this
 
-    # Build list-of-sets from partition dict
+    # Build list-of-sets using string node IDs
     community_ids = set(partition.values())
     communities = [
-        {n for n, c in partition.items() if c == cid}
+        {str(n) for n, c in partition.items() if c == cid}
         for cid in community_ids
     ]
+    # Filter out empty sets and ensure all nodes exist in graph
+    graph_nodes = set(base.nodes())
+    communities = [c & graph_nodes for c in communities]
+    communities = [c for c in communities if c]
 
     try:
-        return round(nx_comm.modularity(base, communities), 4)
+        val = round(nx_comm.modularity(base, communities), 4)
+        return 0.0 if val == -0.0 else val
     except Exception as e:
         print(f"[community] Modularity computation failed: {e}")
         return 0.0
@@ -171,16 +320,22 @@ def compare_algorithms(G: nx.Graph, gn_k: int = 4, algo: str = "both") -> Dict[s
     """
     results = {}
 
-    # Girvan-Newman - Skip for large dense graphs as it's O(V * E^2) and too slow
+    # Girvan-Newman
     n_edges = G.number_of_edges()
-    if algo in ["girvan_newman", "both"] and n_edges <= 1000 and G.number_of_nodes() <= 500:
-        gn_communities = detect_girvan_newman(G, num_communities=gn_k)
+    if algo in ["girvan_newman", "both"]:
+        # Pass k=None to let the algorithm auto-select the best partition by modularity.
+        # If the user set a specific k (gn_k > 0), pass it as an early-stop hint.
+        k_hint = int(gn_k) if gn_k and int(gn_k) > 1 else None
+        gn_result = detect_girvan_newman(G, num_communities=k_hint)
+        # optimal_communities = partition with highest Q (auto-detected)
+        gn_communities = gn_result["optimal_communities"]
         gn_partition = partition_from_list(gn_communities)
-        gn_modularity = compute_modularity(G, gn_partition)
+        gn_modularity = gn_result["optimal_modularity"]
         results["girvan_newman"] = {
             "num_communities": len(gn_communities),
             "modularity": gn_modularity,
             "partition": gn_partition,
+            # NOTE: history excluded to keep JSON small
         }
     else:
         results["girvan_newman"] = {

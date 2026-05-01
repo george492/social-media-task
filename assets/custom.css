@@ -54,6 +54,14 @@
     border-top-color: #8b949e !important;
 }
 
+/* ── Hide Dash DevTools button ── */
+._dash-undo-redo,
+.dash-debug-menu,
+.dash-debug-menu__outer,
+[class*="dash-debug"] {
+    display: none !important;
+}
+
 /* ── Scrollbar styling for sidebar ── */
 #sidebar::-webkit-scrollbar {
     width: 4px;

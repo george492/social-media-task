@@ -64,18 +64,26 @@ def load_graph_from_dataframes(
 
     # --- Add nodes ---
     if nodes_df is not None and not nodes_df.empty:
-        # Standardise column names
+        # Standardise column names (lowercase, strip whitespace)
+        nodes_df = nodes_df.copy()
         nodes_df.columns = nodes_df.columns.str.strip().str.lower()
         
-        # Map common synonyms
+        # Map common synonyms → id
         if "id" not in nodes_df.columns:
-            for syn in ["node", "name", "user", "account"]:
+            for syn in ["node_id", "node", "name", "user", "account", "userid"]:
                 if syn in nodes_df.columns:
                     nodes_df.rename(columns={syn: "id"}, inplace=True)
                     break
                     
         if "id" not in nodes_df.columns:
             raise ValueError(f"Nodes CSV must contain an 'id' column. Found columns: {list(nodes_df.columns)}")
+
+        # Map common synonyms → group (for NMI ground truth)
+        if "group" not in nodes_df.columns:
+            for syn in ["class", "community", "cluster", "label", "category", "dept", "department"]:
+                if syn in nodes_df.columns:
+                    nodes_df.rename(columns={syn: "group"}, inplace=True)
+                    break
 
         records = nodes_df.to_dict("records")
         for row in records:
@@ -89,13 +97,22 @@ def load_graph_from_dataframes(
     # --- Add edges ---
     if edges_df is not None and not edges_df.empty:
         # Standardise column names
+        edges_df = edges_df.copy()
         edges_df.columns = edges_df.columns.str.strip().str.lower()
         
-        # Map common synonyms
-        if "source" not in edges_df.columns and "from" in edges_df.columns:
-            edges_df.rename(columns={"from": "source"}, inplace=True)
-        if "target" not in edges_df.columns and "to" in edges_df.columns:
-            edges_df.rename(columns={"to": "target"}, inplace=True)
+        # Map common synonyms → source / target
+        src_syns = ["from", "src", "node1", "node_1", "source_id", "from_id"]
+        tgt_syns = ["to", "tgt", "node2", "node_2", "target_id", "to_id"]
+        if "source" not in edges_df.columns:
+            for syn in src_syns:
+                if syn in edges_df.columns:
+                    edges_df.rename(columns={syn: "source"}, inplace=True)
+                    break
+        if "target" not in edges_df.columns:
+            for syn in tgt_syns:
+                if syn in edges_df.columns:
+                    edges_df.rename(columns={syn: "target"}, inplace=True)
+                    break
             
         for col in ["source", "target"]:
             if col not in edges_df.columns:

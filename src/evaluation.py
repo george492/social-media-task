@@ -25,18 +25,36 @@ def modularity_score(G: nx.Graph, partition: Dict[str, int]) -> float:
         Modularity score (float).
     """
     if G is None or not partition:
-        return 0.0
+        return None
 
     base = G.to_undirected() if G.is_directed() else G
-    community_ids = set(partition.values())
-    communities = [
-        {n for n, c in partition.items() if c == cid}
-        for cid in community_ids
-    ]
+    graph_nodes = set(str(n) for n in base.nodes())
+    # Filter partition to only nodes that exist in the graph
+    filtered = {n: c for n, c in partition.items() if str(n) in graph_nodes}
+
+    str_to_node = {str(n): n for n in base.nodes()}
+
+    community_ids = set(filtered.values())
+    communities = []
+    for cid in community_ids:
+        comp = {str_to_node[n] for n, c in filtered.items() if c == cid and n in str_to_node}
+        if comp:
+            communities.append(comp)
+            
+    # Add any missing nodes as singleton communities
+    missing_nodes = graph_nodes - set(filtered.keys())
+    for missing_node in missing_nodes:
+        if missing_node in str_to_node:
+            communities.append({str_to_node[missing_node]})
+
     try:
-        return round(nx_comm.modularity(base, communities), 4)
-    except Exception:
-        return 0.0
+        val = round(nx_comm.modularity(base, communities), 4)
+        if val == -0.0:
+            val = 0.0
+        return val
+    except Exception as exc:
+        print(f"[evaluation] modularity failed: {exc}")
+        return None
 
 
 def coverage_score(G: nx.Graph, partition: Dict[str, int]) -> float:
@@ -52,18 +70,33 @@ def coverage_score(G: nx.Graph, partition: Dict[str, int]) -> float:
         Coverage score (float).
     """
     if G is None or G.number_of_edges() == 0 or not partition:
-        return 0.0
+        return None
 
     base = G.to_undirected() if G.is_directed() else G
-    community_ids = set(partition.values())
-    communities = [
-        {n for n, c in partition.items() if c == cid}
-        for cid in community_ids
-    ]
+    graph_nodes = set(str(n) for n in base.nodes())
+    filtered = {n: c for n, c in partition.items() if str(n) in graph_nodes}
+
+    str_to_node = {str(n): n for n in base.nodes()}
+
+    community_ids = set(filtered.values())
+    communities = []
+    for cid in community_ids:
+        comp = {str_to_node[n] for n, c in filtered.items() if c == cid and n in str_to_node}
+        if comp:
+            communities.append(comp)
+
+    missing_nodes = graph_nodes - set(filtered.keys())
+    for missing_node in missing_nodes:
+        if missing_node in str_to_node:
+            communities.append({str_to_node[missing_node]})
+
     try:
-        return round(nx_comm.coverage(base, communities), 4)
-    except Exception:
-        return 0.0
+        # NetworkX has no nx_comm.coverage, it's partition_quality
+        coverage, _ = nx_comm.partition_quality(base, communities)
+        return round(coverage, 4)
+    except Exception as exc:
+        print(f"[evaluation] coverage failed: {exc}")
+        return None
 
 
 def performance_score(G: nx.Graph, partition: Dict[str, int]) -> float:
@@ -72,31 +105,47 @@ def performance_score(G: nx.Graph, partition: Dict[str, int]) -> float:
     A pair is correct if both nodes are in the same community AND connected,
     or in different communities AND not connected.
     Range: [0, 1]. Higher is better.
+    SKIPPED for graphs with > 150 nodes (O(n²) complexity).
 
     Args:
         G: A NetworkX graph.
         partition: Dict mapping node_id -> community_id.
 
     Returns:
-        Performance score (float).
+        Performance score (float), or None if skipped (large graph).
     """
     if G is None or G.number_of_nodes() < 2 or not partition:
-        return 0.0
+        return None
 
-    # Performance is O(V^2) as it checks all pairs. Skip for large graphs.
-    if G.number_of_nodes() > 1000:
-        return 0.0
+    # Skip for large graphs — O(n²) pair comparison freezes the UI
+    if G.number_of_nodes() > 150:
+        print(f"[evaluation] performance_score skipped: {G.number_of_nodes()} nodes > 150 threshold")
+        return None
 
     base = G.to_undirected() if G.is_directed() else G
-    community_ids = set(partition.values())
-    communities = [
-        {n for n, c in partition.items() if c == cid}
-        for cid in community_ids
-    ]
+    graph_nodes = set(str(n) for n in base.nodes())
+    filtered = {n: c for n, c in partition.items() if str(n) in graph_nodes}
+
+    str_to_node = {str(n): n for n in base.nodes()}
+
+    community_ids = set(filtered.values())
+    communities = []
+    for cid in community_ids:
+        comp = {str_to_node[n] for n, c in filtered.items() if c == cid and n in str_to_node}
+        if comp:
+            communities.append(comp)
+
+    missing_nodes = graph_nodes - set(filtered.keys())
+    for missing_node in missing_nodes:
+        if missing_node in str_to_node:
+            communities.append({str_to_node[missing_node]})
+
     try:
-        return round(nx_comm.performance(base, communities), 4)
-    except Exception:
-        return 0.0
+        _, performance = nx_comm.partition_quality(base, communities)
+        return round(performance, 4)
+    except Exception as exc:
+        print(f"[evaluation] performance failed: {exc}")
+        return None
 
 
 def intra_inter_edge_ratio(G: nx.Graph, partition: Dict[str, int]) -> float:
@@ -112,7 +161,7 @@ def intra_inter_edge_ratio(G: nx.Graph, partition: Dict[str, int]) -> float:
         Ratio (float). Returns 0.0 if no inter-community edges exist.
     """
     if G is None or G.number_of_edges() == 0 or not partition:
-        return 0.0
+        return None
 
     intra, inter = 0, 0
     for u, v in G.edges():
@@ -125,7 +174,7 @@ def intra_inter_edge_ratio(G: nx.Graph, partition: Dict[str, int]) -> float:
                 inter += 1
 
     if inter == 0:
-        return float("inf")  # All edges are intra-community (perfect separation)
+        return 999.0  # All edges are intra-community (perfect separation) — cap for display
 
     return round(intra / inter, 4)
 
@@ -221,12 +270,23 @@ def evaluate_partition(
     results = {
         "modularity": modularity_score(G, partition),
         "coverage": coverage_score(G, partition),
-        "performance": performance_score(G, partition),
         "intra_inter_ratio": intra_inter_edge_ratio(G, partition),
     }
 
-    nmi = nmi_score(true_labels, partition)
-    if nmi is not None:
-        results["nmi"] = nmi
+    # Performance is O(n²) — only run on small graphs
+    try:
+        perf = performance_score(G, partition)
+        if perf is not None:
+            results["performance"] = perf
+    except Exception as e:
+        print(f"[evaluation] performance error: {e}")
+
+    # NMI runs independently — never blocked by performance skip
+    try:
+        nmi = nmi_score(true_labels, partition)
+        if nmi is not None:
+            results["nmi"] = nmi
+    except Exception as e:
+        print(f"[evaluation] nmi error: {e}")
 
     return results

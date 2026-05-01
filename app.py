@@ -631,24 +631,53 @@ def update_community_panels(comparison_json, community_json, graph_json, nodes_j
                     w = 1.0
                 G.add_edge(str(e["source"]), str(e["target"]), weight=w)
 
-            # Extract ground-truth labels from nodes CSV if 'group' column exists
+            # Extract ground-truth labels from nodes CSV if 'group' column exists.
+            # Handles both numeric groups (1, 2, 3) and string groups ("5A", "5B", etc.)
             true_labels = None
             if nodes_json:
                 try:
                     ndf = pd.read_json(StringIO(nodes_json), dtype=str)
+                    ndf.columns = ndf.columns.str.strip().str.lower()
+
+                    if "id" not in ndf.columns:
+                        for syn in ["node_id", "node", "name", "user", "account", "userid"]:
+                            if syn in ndf.columns:
+                                ndf = ndf.rename(columns={syn: "id"})
+                                break
+
+                    # Also check for 'class' column synonym in case it wasn't renamed
+                    if "group" not in ndf.columns:
+                        for syn in ["class", "community", "cluster", "label", "category", "dept", "department"]:
+                            if syn in ndf.columns:
+                                ndf = ndf.rename(columns={syn: "group"})
+                                break
+
                     if "group" in ndf.columns and "id" in ndf.columns:
+                        # Build label encoder: map each unique group value → integer
+                        unique_groups = sorted(ndf["group"].dropna().unique().tolist())
+                        label_enc = {g: i for i, g in enumerate(unique_groups)}
+
                         true_labels = {}
                         for _, row in ndf.iterrows():
-                            try:
-                                true_labels[str(row["id"])] = int(float(row["group"])) - 1
-                            except (ValueError, TypeError):
-                                pass
+                            grp = str(row["group"]).strip()
+                            if grp and grp.lower() not in ("nan", "none", ""):
+                                try:
+                                    # Numeric group: use as-is (0-indexed)
+                                    true_labels[str(row["id"])] = int(float(grp))
+                                except (ValueError, TypeError):
+                                    # String group (e.g. "5B"): map via encoder
+                                    true_labels[str(row["id"])] = label_enc.get(grp, 0)
+
                         if not true_labels:
                             true_labels = None
+                        else:
+                            print(f"[eval] true_labels: {len(true_labels)} nodes, "
+                                  f"{len(set(true_labels.values()))} groups: {unique_groups[:8]}")
                 except Exception as e:
                     print(f"[eval] true_labels error: {e}")
 
             evaluation = evaluate_partition(G, partition, true_labels=true_labels)
+            print(f"[eval] results: {evaluation}")
             eval_widget = build_evaluation_table(evaluation)
         except Exception as e:
             import traceback
