@@ -117,11 +117,6 @@ def performance_score(G: nx.Graph, partition: Dict[str, int]) -> float:
     if G is None or G.number_of_nodes() < 2 or not partition:
         return None
 
-    # Skip for large graphs — O(n²) pair comparison freezes the UI
-    if G.number_of_nodes() > 150:
-        print(f"[evaluation] performance_score skipped: {G.number_of_nodes()} nodes > 150 threshold")
-        return None
-
     base = G.to_undirected() if G.is_directed() else G
     graph_nodes = set(str(n) for n in base.nodes())
     filtered = {n: c for n, c in partition.items() if str(n) in graph_nodes}
